@@ -1,0 +1,124 @@
+// PostgreSQL API Client
+const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.100.118:8114/api';
+
+// Helper to get auth headers
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem('auth_token');
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export interface Book {
+  id: string;
+  title: string;
+  author: string;
+  cover?: string;
+  rating: number;
+  progress: number;
+  status: 'reading' | 'completed' | 'want-to-read';
+  pagesRead: number;
+  totalPages: number;
+  reflection?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  quotes?: string[];
+}
+
+export interface ReadingLog {
+  id: string;
+  bookId: string;
+  date: string;
+  pagesRead: number;
+  startPage: number;
+  endPage: number;
+}
+
+// ============ BOOKS API ============
+
+export async function getAllBooks(): Promise<Book[]> {
+  const response = await fetch(`${API_BASE}/books`, {
+    headers: getAuthHeaders()
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to fetch books');
+  return response.json();
+}
+
+export async function getBook(id: string): Promise<Book | undefined> {
+  const response = await fetch(`${API_BASE}/books/${id}`, {
+    headers: getAuthHeaders()
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error('Failed to fetch book');
+  return response.json();
+}
+
+export async function addBook(book: Book): Promise<string> {
+  const response = await fetch(`${API_BASE}/books`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(book),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to add book');
+  const data = await response.json();
+  return data.id;
+}
+
+export async function updateBook(id: string, updates: Partial<Book>): Promise<void> {
+  const response = await fetch(`${API_BASE}/books/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(updates),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to update book');
+}
+
+export async function deleteBook(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/books/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to delete book');
+}
+
+// ============ READING LOGS API ============
+
+export async function getAllReadingLogs(): Promise<ReadingLog[]> {
+  const response = await fetch(`${API_BASE}/reading-logs`, {
+    headers: getAuthHeaders()
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to fetch reading logs');
+  return response.json();
+}
+
+// Alias for getAllReadingLogs
+export const fetchReadingLogs = getAllReadingLogs;
+
+export async function addReadingLog(log: ReadingLog): Promise<string> {
+  const response = await fetch(`${API_BASE}/reading-logs`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(log),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to add reading log');
+  const data = await response.json();
+  return data.id;
+}
+
+export async function deleteReadingLog(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/reading-logs/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to delete reading log');
+}
