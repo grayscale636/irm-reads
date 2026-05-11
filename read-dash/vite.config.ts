@@ -17,6 +17,11 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  preview: {
+    host: "::",
+    port: 8210,
+    allowedHosts: ['reads.irmlabs.my.id', 'localhost', '192.168.100.220'],
+  },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
