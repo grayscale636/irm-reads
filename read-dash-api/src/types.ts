@@ -23,6 +23,14 @@ export interface Book {
   quotes?: string[];
 }
 
+export interface BookNote {
+  id: string;
+  bookId: string;
+  userId: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface ReadingLog {
   id: string;
   userId: string;

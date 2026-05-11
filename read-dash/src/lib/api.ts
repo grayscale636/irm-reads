@@ -99,6 +99,44 @@ export async function getAllReadingLogs(): Promise<ReadingLog[]> {
   return response.json();
 }
 
+// ============ NOTES API ============
+
+export interface BookNote {
+  id: string;
+  bookId: string;
+  text: string;
+  createdAt: string;
+}
+
+export async function getBookNotes(bookId: string): Promise<BookNote[]> {
+  const response = await fetch(`${API_BASE}/notes/book/${bookId}`, {
+    headers: getAuthHeaders()
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to fetch notes');
+  return response.json();
+}
+
+export async function addBookNote(bookId: string, text: string): Promise<BookNote> {
+  const response = await fetch(`${API_BASE}/notes`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ bookId, text }),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to add note');
+  return response.json();
+}
+
+export async function deleteBookNote(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/notes/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to delete note');
+}
+
 // Alias for getAllReadingLogs
 export const fetchReadingLogs = getAllReadingLogs;
 

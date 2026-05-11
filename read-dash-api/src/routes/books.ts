@@ -14,7 +14,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const result = await pool.query(`
       SELECT id, title, author, cover, rating, progress, status,
              pages_read as "pagesRead", total_pages as "totalPages",
-             reflection, started_at::text as "startedAt", finished_at::text as "finishedAt", quotes
+             reflection, started_at::text as "startedAt",
+             finished_at::text as "finishedAt", quotes
       FROM books WHERE user_id = $1 ORDER BY created_at DESC
     `, [req.userId]);
     res.json(result.rows);
@@ -31,7 +32,8 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     const result = await pool.query(`
       SELECT id, title, author, cover, rating, progress, status,
              pages_read as "pagesRead", total_pages as "totalPages",
-             reflection, started_at::text as "startedAt", finished_at::text as "finishedAt", quotes
+             reflection, started_at::text as "startedAt",
+             finished_at::text as "finishedAt", quotes
       FROM books WHERE id = $1 AND user_id = $2
     `, [id, req.userId]);
     
@@ -59,7 +61,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     `, [
       book.id, req.userId, book.title, book.author, book.cover || null, book.rating || 0,
       book.progress || 0, book.status, book.pagesRead || 0, book.totalPages,
-      book.reflection || null, book.startedAt || null, book.finishedAt || null,
+      book.reflection || null,
+      book.startedAt || null, book.finishedAt || null,
       book.quotes || []
     ]);
     res.status(201).json({ message: 'Book created', id: result.rows[0].id });

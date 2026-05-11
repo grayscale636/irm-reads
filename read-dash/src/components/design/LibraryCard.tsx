@@ -78,6 +78,9 @@ export function LibraryCard({ book, onClick }: Props) {
             <ProgressBar value={book.pagesRead} max={book.totalPages} height={3} />
           </div>
         )}
+        {book.notes && (
+          <p className="irm-libcard__notes">{book.notes.length > 80 ? book.notes.slice(0, 80) + "…" : book.notes}</p>
+        )}
       </div>
     </button>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { useBooks, type BookData } from "@/contexts/BooksContext";
 import type { OutletCtx } from "@/layouts/AppLayout";
@@ -6,6 +6,7 @@ import { Icon } from "@/components/design/Icons";
 import { BookCover } from "@/components/design/BookCover";
 import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
+import { getBookNotes, addBookNote, deleteBookNote, type BookNote } from "@/lib/api";
 
 export default function BookDetail() {
   const { id } = useParams<{ id: string }>();
@@ -24,17 +25,32 @@ export default function BookDetail() {
   const book = books.find((b) => b.id === id);
 
   const [pagesInput, setPagesInput] = useState<string>("");
-  const [editingReflection, setEditingReflection] = useState(false);
-  const [reflectionInput, setReflectionInput] = useState("");
+  const [notes, setNotes] = useState<BookNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [noteInput, setNoteInput] = useState("");
+  const [showNoteForm, setShowNoteForm] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
+
+  const loadNotes = useCallback(async () => {
+    if (!book?.id) return;
+    setNotesLoading(true);
+    try {
+      const data = await getBookNotes(book.id);
+      setNotes(data);
+    } catch {
+      // silently fail
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [book?.id]);
 
   useEffect(() => {
     if (book) {
       setPagesInput(String(book.pagesRead));
-      setReflectionInput(book.reflection || "");
+      loadNotes();
     }
-  }, [book?.id, book?.pagesRead, book?.reflection]);
+  }, [book?.id, book?.pagesRead, loadNotes]);
 
   if (isLoading) {
     return <div className="irm-loading"><div className="irm-spinner" /></div>;
@@ -78,7 +94,6 @@ export default function BookDetail() {
     if (n > book.pagesRead) {
       await addReadingLog(book.id, book.pagesRead, n, today);
     } else {
-      // Direct decrease — just update without log
       await updateBook(book.id, { pagesRead: n });
     }
   };
@@ -95,9 +110,26 @@ export default function BookDetail() {
     await updateBook(book.id, updates);
   };
 
-  const saveReflection = async () => {
-    await updateBook(book.id, { reflection: reflectionInput });
-    setEditingReflection(false);
+  const addNote = async () => {
+    const text = noteInput.trim();
+    if (!text) return;
+    try {
+      await addBookNote(book.id, text);
+      setNoteInput("");
+      setShowNoteForm(false);
+      await loadNotes();
+    } catch (e) {
+      console.error("Failed to add note:", e);
+    }
+  };
+
+  const removeNote = async (noteId: string) => {
+    try {
+      await deleteBookNote(noteId);
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    } catch (e) {
+      console.error("Failed to delete note:", e);
+    }
   };
 
   const addQuote = async () => {
@@ -236,49 +268,83 @@ export default function BookDetail() {
           <section className="irm-card">
             <div className="irm-section-head">
               <div>
-                <h2 className="irm-section-title">Reflection</h2>
-                <p className="irm-section-sub">Your private notes.</p>
+                <h2 className="irm-section-title">Notes</h2>
+                <p className="irm-section-sub">
+                  <span className="irm-mono">{notes.length}</span> entries
+                </p>
               </div>
-              {!editingReflection && book.reflection && (
-                <button className="irm-btn irm-btn--ghost" onClick={() => setEditingReflection(true)}>
-                  Edit
+              {!showNoteForm && (
+                <button className="irm-btn irm-btn--ghost" onClick={() => setShowNoteForm(true)}>
+                  <Icon.Plus size={13} /> Add note
                 </button>
               )}
             </div>
-            {editingReflection ? (
-              <div className="irm-reflect__edit">
+            {showNoteForm && (
+              <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
                 <textarea
                   className="irm-input irm-textarea"
-                  rows={5}
-                  value={reflectionInput}
-                  onChange={(e) => setReflectionInput(e.target.value)}
-                  placeholder="What stayed with you?"
+                  rows={4}
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  placeholder={
+                    book.status === "want-to-read"
+                      ? "Why do you want to read this?"
+                      : book.status === "paused"
+                      ? "Why did you pause?"
+                      : book.status === "dnf"
+                      ? "Why did you not finish?"
+                      : "Your thoughts..."
+                  }
                   autoFocus
                 />
                 <div className="irm-reflect__actions">
                   <button
                     className="irm-btn irm-btn--ghost"
                     onClick={() => {
-                      setReflectionInput(book.reflection || "");
-                      setEditingReflection(false);
+                      setNoteInput("");
+                      setShowNoteForm(false);
                     }}
                   >
                     Cancel
                   </button>
-                  <button className="irm-btn irm-btn--primary" onClick={saveReflection}>
+                  <button
+                    className="irm-btn irm-btn--primary"
+                    disabled={!noteInput.trim()}
+                    onClick={addNote}
+                  >
                     <Icon.Check size={13} /> Save
                   </button>
                 </div>
               </div>
-            ) : book.reflection ? (
-              <p className="irm-reflect__text">{book.reflection}</p>
-            ) : (
+            )}
+            {notesLoading ? (
+              <div className="irm-loading" style={{ padding: 20 }}><div className="irm-spinner" /></div>
+            ) : notes.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
-                <div className="irm-empty__text">No reflection yet.</div>
-                <button className="irm-btn irm-btn--ghost" onClick={() => setEditingReflection(true)}>
-                  <Icon.Plus size={13} /> Add reflection
+                <div className="irm-empty__text">No notes yet.</div>
+                <button className="irm-btn irm-btn--ghost" onClick={() => setShowNoteForm(true)}>
+                  <Icon.Plus size={13} /> Add note
                 </button>
               </div>
+            ) : (
+              <ul className="irm-quotes">
+                {notes.map((n) => (
+                  <li key={n.id} className="irm-quote">
+                    <div className="irm-quote__mark">✎</div>
+                    <div className="irm-quote__body">
+                      <p className="irm-quote__text">{n.text}</p>
+                      <span className="irm-mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {new Date(n.createdAt).toLocaleDateString("en-ID", {
+                          month: "short", day: "numeric"
+                        })}
+                      </span>
+                    </div>
+                    <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
+                      <Icon.Trash size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 

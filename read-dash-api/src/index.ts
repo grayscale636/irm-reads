@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import booksRouter from './routes/books';
 import readingLogsRouter from './routes/readingLogs';
+import notesRouter from './routes/notes';
 
 dotenv.config();
 
@@ -85,6 +86,7 @@ app.use('/api/auth', authLimiter, authRouter);
 // Protected routes (middleware applied in each router)
 app.use('/api/books', booksRouter);
 app.use('/api/reading-logs', readingLogsRouter);
+app.use('/api/notes', notesRouter);
 
 // Error handler - include CORS headers even on errors
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
