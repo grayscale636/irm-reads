@@ -1,655 +1,379 @@
-import { useState, useEffect, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Star, Calendar, BookOpen, Edit, Trash2, Camera, Plus, Quote, X, Loader2, History } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { useBooks, BookData, ReadingLogData } from "@/contexts/BooksContext";
-import { uploadToMinio, deleteFromMinio, isMinioUrl } from "@/lib/minio";
-import { fetchReadingLogs, ReadingLog, deleteReadingLog } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { useBooks, type BookData } from "@/contexts/BooksContext";
+import type { OutletCtx } from "@/layouts/AppLayout";
+import { Icon } from "@/components/design/Icons";
+import { BookCover } from "@/components/design/BookCover";
+import { ProgressBar } from "@/components/design/ProgressBar";
+import { StarRating } from "@/components/design/StarRating";
 
-const BookDetail = () => {
-  const { id } = useParams();
+export default function BookDetail() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBook, updateBook, deleteBook, addReadingLog } = useBooks();
-  const [isEditingReflection, setIsEditingReflection] = useState(false);
-  const [reflection, setReflection] = useState("");
-  const [newQuote, setNewQuote] = useState("");
-  const [isAddingQuote, setIsAddingQuote] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
-  const [localPagesRead, setLocalPagesRead] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Reading History state
-  const [readingLogs, setReadingLogs] = useState<ReadingLog[]>([]);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
-  const [logStartPage, setLogStartPage] = useState(0);
-  const [logEndPage, setLogEndPage] = useState(0);
+  const { today } = useOutletContext<OutletCtx>();
+  const {
+    books,
+    readingLogs,
+    isLoading,
+    updateBook,
+    deleteBook,
+    addReadingLog,
+    deleteReadingLog,
+  } = useBooks();
 
-  const book = getBook(id || "");
+  const book = books.find((b) => b.id === id);
 
-  // Load reading logs for this book
-  useEffect(() => {
-    if (id) {
-      setIsLoadingLogs(true);
-      fetchReadingLogs()
-        .then((logs) => {
-          const bookLogs = logs.filter((log) => log.bookId === id);
-          // Sort by date descending (newest first)
-          bookLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setReadingLogs(bookLogs);
-        })
-        .catch((error) => {
-          console.error("Failed to load reading logs:", error);
-        })
-        .finally(() => {
-          setIsLoadingLogs(false);
-        });
-    }
-  }, [id]);
-
-  // Set default start page when opening add log dialog
-  useEffect(() => {
-    if (isAddLogDialogOpen && book) {
-      setLogStartPage(book.pagesRead);
-      setLogEndPage(book.pagesRead);
-    }
-  }, [isAddLogDialogOpen, book]);
-
-  const handleAddLog = async () => {
-    if (!book) return;
-    
-    if (logStartPage >= logEndPage) {
-      toast.error("End page must be greater than start page");
-      return;
-    }
-    
-    if (logEndPage > book.totalPages) {
-      toast.error(`End page cannot exceed total pages (${book.totalPages})`);
-      return;
-    }
-
-    try {
-      // addReadingLog will also update book.pagesRead automatically
-      await addReadingLog(book.id, logStartPage, logEndPage);
-      
-      // Refresh reading logs
-      const logs = await fetchReadingLogs();
-      const bookLogs = logs.filter((log) => log.bookId === book.id);
-      bookLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setReadingLogs(bookLogs);
-      
-      toast.success(`Logged reading: p.${logStartPage} → p.${logEndPage}`);
-      setIsAddLogDialogOpen(false);
-      setLogStartPage(0);
-      setLogEndPage(0);
-    } catch (error) {
-      toast.error("Failed to add reading log");
-    }
-  };
-
-  const handleDeleteLog = async (logId: string) => {
-    if (!confirm("Delete this reading log?")) return;
-    
-    try {
-      await deleteReadingLog(logId);
-      setReadingLogs((prev) => prev.filter((log) => log.id !== logId));
-      toast.success("Reading log deleted");
-    } catch (error) {
-      toast.error("Failed to delete reading log");
-    }
-  };
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !book) return;
-
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size should be less than 5MB");
-      return;
-    }
-
-    setIsUploadingCover(true);
-    try {
-      // Delete old cover from MinIO if exists
-      if (book.cover && isMinioUrl(book.cover)) {
-        await deleteFromMinio(book.cover);
-      }
-
-      // Upload new cover to MinIO
-      const result = await uploadToMinio(file);
-      
-      if (result.success && result.url) {
-        await updateBook(book.id, { cover: result.url });
-        toast.success("Cover uploaded to MinIO!");
-      } else {
-        toast.error(result.error || "Failed to upload cover");
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Failed to upload cover");
-    } finally {
-      setIsUploadingCover(false);
-    }
-  };
+  const [pagesInput, setPagesInput] = useState<string>("");
+  const [editingReflection, setEditingReflection] = useState(false);
+  const [reflectionInput, setReflectionInput] = useState("");
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [quoteInput, setQuoteInput] = useState("");
 
   useEffect(() => {
-    if (book?.reflection) {
-      setReflection(book.reflection);
+    if (book) {
+      setPagesInput(String(book.pagesRead));
+      setReflectionInput(book.reflection || "");
     }
-  }, [book?.reflection]);
+  }, [book?.id, book?.pagesRead, book?.reflection]);
+
+  if (isLoading) {
+    return <div className="irm-loading"><div className="irm-spinner" /></div>;
+  }
 
   if (!book) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold">Book not found</h1>
-          <Link to="/">
-            <Button>Back to Library</Button>
-          </Link>
+      <div className="irm-main">
+        <div className="irm-card irm-empty" style={{ minHeight: 200 }}>
+          <div className="irm-empty__text">Book not found.</div>
+          <button className="irm-btn irm-btn--ghost" onClick={() => navigate("/")}>
+            <Icon.ChevronLeft size={13} /> Back to library
+          </button>
         </div>
       </div>
     );
   }
 
-  const handleSaveReflection = async () => {
-    await updateBook(book.id, { reflection });
-    toast.success("Reflection saved!");
-    setIsEditingReflection(false);
-  };
+  const total = book.totalPages || 1;
+  const pct = Math.round((book.pagesRead / total) * 100);
+  const bookLogs = readingLogs
+    .filter((l) => l.bookId === book.id)
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const quotes = book.quotes || [];
 
-  const handleDeleteBook = async () => {
-    if (confirm("Are you sure you want to delete this book?")) {
-      // Delete cover from MinIO if exists
-      if (book.cover && isMinioUrl(book.cover)) {
-        await deleteFromMinio(book.cover);
-      }
-      await deleteBook(book.id);
-      toast.success("Book deleted!");
-      navigate("/");
+  const savePages = async () => {
+    const n = Math.max(0, Math.min(book.totalPages, parseInt(pagesInput, 10) || 0));
+    if (n === book.pagesRead) return;
+    if (n > book.pagesRead) {
+      await addReadingLog(book.id, book.pagesRead, n, today);
+    } else {
+      // Direct decrease — just update without log
+      await updateBook(book.id, { pagesRead: n });
     }
   };
 
+  const markComplete = async () => {
+    await updateBook(book.id, { status: "completed" });
+  };
+
+  const updateStatus = async (status: BookData["status"]) => {
+    const updates: Partial<BookData> = { status };
+    if (status === "completed") {
+      updates.finishedAt = today;
+    }
+    await updateBook(book.id, updates);
+  };
+
+  const saveReflection = async () => {
+    await updateBook(book.id, { reflection: reflectionInput });
+    setEditingReflection(false);
+  };
+
+  const addQuote = async () => {
+    const text = quoteInput.trim();
+    if (!text) return;
+    await updateBook(book.id, { quotes: [...quotes, text] });
+    setQuoteInput("");
+    setShowQuoteForm(false);
+  };
+
+  const deleteQuote = async (index: number) => {
+    const next = quotes.filter((_, i) => i !== index);
+    await updateBook(book.id, { quotes: next });
+  };
+
+  const handleDeleteBook = async () => {
+    if (!confirm("Delete this book and all its reading logs?")) return;
+    await deleteBook(book.id);
+    navigate("/");
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/">
-            <Button variant="ghost" className="gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Library
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={handleDeleteBook}
-              className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+    <div className="irm-main irm-detail">
+      <button className="irm-backbtn" onClick={() => navigate("/")}>
+        <Icon.ChevronLeft size={14} /> Back to library
+      </button>
+
+      <div className="irm-detail__layout">
+        <aside className="irm-detail__left">
+          <div className="irm-detail__cover">
+            <BookCover book={book} size="lg" />
+            <button
+              className="irm-detail__cover-edit"
+              onClick={async () => {
+                const url = prompt("Cover image URL", book.cover || "");
+                if (url !== null) await updateBook(book.id, { cover: url });
+              }}
             >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-            <ThemeToggle />
+              <Icon.Camera size={14} /> Change cover
+            </button>
           </div>
-        </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Book Cover & Info */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="overflow-hidden border-border shadow-book">
-              <div 
-                className={`aspect-[2/3] bg-gradient-to-br from-primary/20 to-accent/20 relative group ${isUploadingCover ? 'pointer-events-none' : 'cursor-pointer'}`}
-                onClick={() => !isUploadingCover && fileInputRef.current?.click()}
+          <div className="irm-detail__meta">
+            <h1 className="irm-detail__title">{book.title}</h1>
+            <p className="irm-detail__author">by {book.author}</p>
+
+            <div className="irm-detail__metaitem">
+              <span className="irm-field__label">Rating</span>
+              <StarRating
+                value={book.rating}
+                onChange={(r) => updateBook(book.id, { rating: r })}
+                size={16}
+              />
+            </div>
+
+            <div className="irm-detail__metaitem">
+              <span className="irm-field__label">Status</span>
+              <select
+                className="irm-input"
+                value={book.status}
+                onChange={(e) => updateStatus(e.target.value as BookData["status"])}
               >
-                <img 
-                  src={book.cover} 
-                  alt={book.title}
-                  className="w-full h-full object-cover"
-                />
-                {isUploadingCover ? (
-                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                    <div className="text-white text-center">
-                      <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin" />
-                      <p className="text-sm">Uploading...</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="text-white text-center">
-                      <Camera className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-sm">Change Cover</p>
-                    </div>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleCoverUpload}
-                />
+                <option value="want-to-read">Want to read</option>
+                <option value="reading">Reading</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+
+            <div className="irm-detail__metaitem">
+              <span className="irm-field__label">Pages</span>
+              <span className="irm-mono irm-detail__metaval">
+                {book.pagesRead} / {book.totalPages} · {pct}%
+              </span>
+            </div>
+
+            <div className="irm-detail__metaitem">
+              <button className="irm-btn irm-btn--danger" onClick={handleDeleteBook}>
+                <Icon.Trash size={13} /> Delete book
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <div className="irm-detail__right">
+          <section className="irm-card">
+            <div className="irm-section-head">
+              <div>
+                <h2 className="irm-section-title">Reading progress</h2>
+                <p className="irm-section-sub">Track where you are.</p>
               </div>
-              <CardContent className="p-6 space-y-4">
-                <div>
-                  <h1 className="text-2xl font-bold mb-2">{book.title}</h1>
-                  <p className="text-muted-foreground">{book.author}</p>
+            </div>
+            <div className="irm-detail__progress-grid">
+              <div className="irm-detail__progress-stat">
+                <div className="irm-field__label">Started</div>
+                <div className="irm-mono irm-detail__progress-val">{book.startedAt || "Not started"}</div>
+              </div>
+              <div className="irm-detail__progress-stat">
+                <div className="irm-field__label">Finished</div>
+                <div className="irm-mono irm-detail__progress-val">{book.finishedAt || "Not finished"}</div>
+              </div>
+              <div className="irm-detail__progress-stat">
+                <div className="irm-field__label">Progress</div>
+                <div className="irm-detail__progress-bar">
+                  <ProgressBar value={book.pagesRead} max={book.totalPages} height={6} />
+                  <span className="irm-mono">{pct}%</span>
                 </div>
-                
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Myy Rating</p>
-                  <div className="flex items-center gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          // If clicking on the same star, clear rating
-                          const newRating = book.rating === i + 1 ? 0 : i + 1;
-                          updateBook(book.id, { rating: newRating });
-                        }}
-                        className="hover:scale-110 transition-transform"
-                      >
-                        <Star
-                          className={`w-6 h-6 cursor-pointer ${
-                            i < book.rating
-                              ? "fill-primary text-primary"
-                              : "text-muted-foreground hover:text-primary"
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Status</span>
-                    <Select 
-                      value={book.status} 
-                      onValueChange={(value: BookData["status"]) => {
-                        updateBook(book.id, { status: value });
-                        toast.success("Status updated!");
-                      }}
-                    >
-                      <SelectTrigger className="w-[140px] h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="want-to-read">Want to Read</SelectItem>
-                        <SelectItem value="reading">Reading</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Pages</span>
-                    <span>{book.pagesRead} / {book.totalPages}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span>{book.progress}%</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Reading Details & Reflection */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Reading Progress */}
-            <Card className="border-border shadow-book">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-primary" />
-                  Reading Progress
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-secondary/50 p-4 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Started</p>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-primary" />
-                      <p className="font-semibold">{book.startedAt || "Not started"}</p>
-                    </div>
-                  </div>
-                  <div className="bg-secondary/50 p-4 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Finished</p>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-primary" />
-                      <p className="font-semibold">{book.finishedAt || "Not finished"}</p>
-                    </div>
-                  </div>
-                  <div className="bg-secondary/50 p-4 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Progress</p>
-                    <div className="flex items-center gap-2">
-                      <Progress value={book.progress} className="flex-1" />
-                      <p className="font-semibold">{book.progress}%</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Update Pages Read */}
-                {book.status !== "completed" && (
-                  <div className="pt-4 border-t border-border">
-                    <Label htmlFor="pagesRead" className="text-sm font-medium">
-                      Update Pages Read
-                    </Label>
-                    <div className="flex items-center gap-3 mt-2">
-                      <Input
-                        id="pagesRead"
-                        type="number"
-                        min={0}
-                        max={book.totalPages}
-                        value={localPagesRead !== null ? localPagesRead : book.pagesRead}
-                        onChange={(e) => {
-                          const pages = Math.min(parseInt(e.target.value) || 0, book.totalPages);
-                          setLocalPagesRead(pages);
-                        }}
-                        onBlur={() => {
-                          if (localPagesRead !== null && localPagesRead !== book.pagesRead) {
-                            updateBook(book.id, { pagesRead: localPagesRead });
-                            toast.success(`Updated to ${localPagesRead} pages`);
-                          }
-                          setLocalPagesRead(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        className="w-24"
-                      />
-                      <span className="text-muted-foreground">/ {book.totalPages} pages</span>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => {
-                          updateBook(book.id, { 
-                            pagesRead: book.totalPages, 
-                            status: "completed",
-                            progress: 100
-                          });
-                          toast.success("Book marked as completed!");
-                        }}
-                      >
-                        Mark Complete
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Reflection */}
-            <Card className="border-border shadow-book">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>My Reflection</CardTitle>
-                  {!isEditingReflection && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditingReflection(true)}
-                      className="gap-2"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isEditingReflection ? (
-                  <div className="space-y-4">
-                    <Textarea
-                      value={reflection}
-                      onChange={(e) => setReflection(e.target.value)}
-                      placeholder="Share Myy thoughts about this book..."
-                      className="min-h-[200px]"
+              </div>
+            </div>
+            {book.status !== "completed" && (
+              <div className="irm-detail__pages-row">
+                <label className="irm-field">
+                  <span className="irm-field__label">Update pages read</span>
+                  <div className="irm-detail__pages-inputs">
+                    <input
+                      type="number"
+                      className="irm-input irm-mono"
+                      value={pagesInput}
+                      min={0}
+                      max={book.totalPages}
+                      onChange={(e) => setPagesInput(e.target.value)}
+                      onBlur={savePages}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                     />
-                    <div className="flex gap-2">
-                      <Button onClick={handleSaveReflection}>
-                        Save Reflection
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsEditingReflection(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
+                    <span className="irm-detail__pages-of irm-mono">/ {book.totalPages}</span>
+                    <button className="irm-btn irm-btn--ghost" onClick={markComplete}>
+                      <Icon.Check size={13} /> Mark complete
+                    </button>
                   </div>
-                ) : (
-                  <div className="prose prose-sm max-w-none">
-                    <p className="text-muted-foreground leading-relaxed">
-                      {reflection || "No reflection yet. Click Edit to add Myy thoughts about this book."}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </label>
+              </div>
+            )}
+          </section>
 
-            {/* Quotes */}
-            <Card className="border-border shadow-book">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Quote className="w-5 h-5 text-primary" />
-                    Favorite Quotes
-                  </CardTitle>
-                  {!isAddingQuote && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsAddingQuote(true)}
-                      className="gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Quote
-                    </Button>
-                  )}
+          <section className="irm-card">
+            <div className="irm-section-head">
+              <div>
+                <h2 className="irm-section-title">Reflection</h2>
+                <p className="irm-section-sub">Your private notes.</p>
+              </div>
+              {!editingReflection && book.reflection && (
+                <button className="irm-btn irm-btn--ghost" onClick={() => setEditingReflection(true)}>
+                  Edit
+                </button>
+              )}
+            </div>
+            {editingReflection ? (
+              <div className="irm-reflect__edit">
+                <textarea
+                  className="irm-input irm-textarea"
+                  rows={5}
+                  value={reflectionInput}
+                  onChange={(e) => setReflectionInput(e.target.value)}
+                  placeholder="What stayed with you?"
+                  autoFocus
+                />
+                <div className="irm-reflect__actions">
+                  <button
+                    className="irm-btn irm-btn--ghost"
+                    onClick={() => {
+                      setReflectionInput(book.reflection || "");
+                      setEditingReflection(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button className="irm-btn irm-btn--primary" onClick={saveReflection}>
+                    <Icon.Check size={13} /> Save
+                  </button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {isAddingQuote && (
-                  <div className="space-y-3 mb-4 p-4 bg-secondary/30 rounded-lg">
-                    <Textarea
-                      value={newQuote}
-                      onChange={(e) => setNewQuote(e.target.value)}
-                      placeholder="Enter a memorable quote from this book..."
-                      className="min-h-[100px]"
-                    />
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm"
-                        onClick={() => {
-                          if (newQuote.trim()) {
-                            const quotes = book.quotes || [];
-                            updateBook(book.id, { quotes: [...quotes, newQuote.trim()] });
-                            setNewQuote("");
-                            setIsAddingQuote(false);
-                            toast.success("Quote added!");
-                          }
-                        }}
-                      >
-                        Save Quote
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setNewQuote("");
-                          setIsAddingQuote(false);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
+              </div>
+            ) : book.reflection ? (
+              <p className="irm-reflect__text">{book.reflection}</p>
+            ) : (
+              <div className="irm-empty" style={{ padding: "24px 0" }}>
+                <div className="irm-empty__text">No reflection yet.</div>
+                <button className="irm-btn irm-btn--ghost" onClick={() => setEditingReflection(true)}>
+                  <Icon.Plus size={13} /> Add reflection
+                </button>
+              </div>
+            )}
+          </section>
 
-                {book.quotes && book.quotes.length > 0 ? (
-                  <div className="space-y-3">
-                    {book.quotes.map((quote, index) => (
-                      <div 
-                        key={index} 
-                        className="relative p-4 bg-secondary/30 rounded-lg border-l-4 border-primary group"
-                      >
-                        <button
-                          onClick={() => {
-                            const newQuotes = book.quotes?.filter((_, i) => i !== index);
-                            updateBook(book.id, { quotes: newQuotes });
-                            toast.success("Quote deleted!");
-                          }}
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                        <p className="text-foreground italic pr-6">"{quote}"</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  !isAddingQuote && (
-                    <p className="text-muted-foreground text-center py-4">
-                      No quotes yet. Add Myy favorite quotes from this book!
-                    </p>
-                  )
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Reading History */}
-            <Card className="border-border shadow-book">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <History className="w-5 h-5 text-primary" />
-                    Reading History
-                  </CardTitle>
-                  <Dialog open={isAddLogDialogOpen} onOpenChange={setIsAddLogDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Plus className="w-4 h-4" />
-                        Add Log
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add Reading Log</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 pt-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="startPage">Start Page</Label>
-                            <Input
-                              id="startPage"
-                              type="number"
-                              min={0}
-                              max={book?.totalPages || 0}
-                              value={logStartPage}
-                              onChange={(e) => setLogStartPage(parseInt(e.target.value) || 0)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="endPage">End Page</Label>
-                            <Input
-                              id="endPage"
-                              type="number"
-                              min={0}
-                              max={book?.totalPages || 0}
-                              value={logEndPage}
-                              onChange={(e) => setLogEndPage(parseInt(e.target.value) || 0)}
-                            />
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Pages read: {Math.max(0, logEndPage - logStartPage)} pages
-                        </p>
-                        <Button onClick={handleAddLog} className="w-full">
-                          Add Reading Log
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+          <section className="irm-card">
+            <div className="irm-section-head">
+              <div>
+                <h2 className="irm-section-title">Quotes</h2>
+                <p className="irm-section-sub">
+                  <span className="irm-mono">{quotes.length}</span> saved
+                </p>
+              </div>
+              {!showQuoteForm && (
+                <button className="irm-btn irm-btn--ghost" onClick={() => setShowQuoteForm(true)}>
+                  <Icon.Plus size={13} /> Add quote
+                </button>
+              )}
+            </div>
+            {showQuoteForm && (
+              <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
+                <textarea
+                  className="irm-input irm-textarea"
+                  rows={3}
+                  value={quoteInput}
+                  onChange={(e) => setQuoteInput(e.target.value)}
+                  placeholder="Type or paste a quote…"
+                  autoFocus
+                />
+                <div className="irm-reflect__actions">
+                  <button
+                    className="irm-btn irm-btn--ghost"
+                    onClick={() => {
+                      setQuoteInput("");
+                      setShowQuoteForm(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="irm-btn irm-btn--primary"
+                    disabled={!quoteInput.trim()}
+                    onClick={addQuote}
+                  >
+                    <Icon.Check size={13} /> Save quote
+                  </button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {isLoadingLogs ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : readingLogs.length > 0 ? (
-                  <div className="space-y-3">
-                    {readingLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg group"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm">
-                            <p className="font-medium">
-                              p.{log.startPage} → p.{log.endPage}
-                            </p>
-                            <p className="text-muted-foreground">
-                              {log.endPage - log.startPage} pages
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(log.date).toLocaleDateString("id-ID", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteLog(log.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">
-                    No reading logs yet. Track your reading sessions!
-                  </p>
+              </div>
+            )}
+            {quotes.length === 0 ? (
+              <div className="irm-empty" style={{ padding: "24px 0" }}>
+                <div className="irm-empty__text">No quotes yet.</div>
+              </div>
+            ) : (
+              <ul className="irm-quotes">
+                {quotes.map((q, idx) => (
+                  <li key={idx} className="irm-quote">
+                    <div className="irm-quote__mark">"</div>
+                    <div className="irm-quote__body">
+                      <p className="irm-quote__text">{q}</p>
+                    </div>
+                    <button className="irm-logitem__delete" onClick={() => deleteQuote(idx)}>
+                      <Icon.Trash size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="irm-card">
+            <div className="irm-section-head">
+              <div>
+                <h2 className="irm-section-title">Reading history</h2>
+                <p className="irm-section-sub">
+                  <span className="irm-mono">{bookLogs.length}</span> sessions
+                </p>
+              </div>
+            </div>
+            {bookLogs.length === 0 ? (
+              <div className="irm-empty" style={{ padding: "24px 0" }}>
+                <div className="irm-empty__text">No reading logged yet.</div>
+              </div>
+            ) : (
+              <ul className="irm-history">
+                {bookLogs.slice(0, 12).map((log) => (
+                  <li key={log.id} className="irm-history__item">
+                    <div className="irm-history__date irm-mono">{log.date.slice(5)}</div>
+                    <div className="irm-history__range irm-mono">
+                      {log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : "session"}
+                    </div>
+                    <div className="irm-history__pages">
+                      <span className="irm-mono">{log.pagesRead}</span>
+                      <span className="irm-history__pages-label">pages</span>
+                    </div>
+                    <button className="irm-logitem__delete" onClick={() => deleteReadingLog(log.id)}>
+                      <Icon.Trash size={14} />
+                    </button>
+                  </li>
+                ))}
+                {bookLogs.length > 12 && (
+                  <li className="irm-history__more irm-mono">
+                    + {bookLogs.length - 12} earlier sessions
+                  </li>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </ul>
+            )}
+          </section>
         </div>
-      </main>
+      </div>
     </div>
   );
-};
-
-export default BookDetail;
+}
