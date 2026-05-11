@@ -59,6 +59,11 @@ export const Icon = {
       <polyline points="9 18 15 12 9 6" />
     </svg>
   ),
+  ChevronDown: ({ size = 16 }: IconProps) => (
+    <svg {...base(size)}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  ),
   Trash: ({ size = 14 }: IconProps) => (
     <svg {...base(size)}>
       <polyline points="3 6 5 6 21 6" />

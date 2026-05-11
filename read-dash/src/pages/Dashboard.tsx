@@ -10,15 +10,21 @@ import { YearHeatmap } from "@/components/design/YearHeatmap";
 import { PaceChart } from "@/components/design/PaceChart";
 import { DailyLog } from "@/components/design/DailyLog";
 import { LogDialog } from "@/components/design/LogDialog";
+import { YearProjection } from "@/components/design/YearProjection";
+import { PersonalRecords } from "@/components/design/PersonalRecords";
+import { TopAuthors } from "@/components/design/TopAuthors";
+import { FinishedTimeline } from "@/components/design/FinishedTimeline";
+import { useCollapsible } from "@/hooks/use-collapsible";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { today } = useOutletContext<OutletCtx>();
-  const { books, readingLogs, stats, isLoading, addReadingLog, deleteReadingLog } = useBooks();
+  const { books, readingLogs, stats, isLoading, addReadingLog, deleteReadingLog, updateBook } = useBooks();
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [logDialog, setLogDialog] = useState<{ open: boolean; bookId: string | null }>({ open: false, bookId: null });
+  const insights = useCollapsible("dashboard-insights", true);
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -80,6 +86,7 @@ export default function Dashboard() {
         today={today}
         onLogReading={(bookId) => setLogDialog({ open: true, bookId })}
         onOpenBook={(id) => navigate(`/book/${id}`)}
+        onChangeStatus={(id, status) => updateBook(id, { status })}
       />
 
       <section className="irm-card">
@@ -107,6 +114,39 @@ export default function Dashboard() {
           />
         </section>
       </div>
+
+      <section>
+        <div className="irm-section-head">
+          <div>
+            <h2 className="irm-section-title">Insights</h2>
+            <p className="irm-section-sub">Pace, records, and what's shaping your library.</p>
+          </div>
+          <button
+            type="button"
+            className="irm-section-toggle"
+            aria-expanded={insights.open}
+            onClick={insights.toggle}
+          >
+            {insights.open ? "Collapse" : "Expand"}
+            <span className="irm-section-toggle__chev"><Icon.ChevronDown size={14} /></span>
+          </button>
+        </div>
+        {insights.open && (
+          <div className="irm-trio">
+            <section className="irm-card">
+              <YearProjection books={books} logs={readingLogs} today={today} />
+            </section>
+            <section className="irm-card">
+              <PersonalRecords books={books} logs={readingLogs} />
+            </section>
+            <section className="irm-card">
+              <TopAuthors books={books} />
+            </section>
+          </div>
+        )}
+      </section>
+
+      <FinishedTimeline books={books} onOpenBook={(id) => navigate(`/book/${id}`)} />
 
       <LogDialog
         open={logDialog.open}
