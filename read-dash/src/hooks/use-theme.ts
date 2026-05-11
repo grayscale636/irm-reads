@@ -1,46 +1,21 @@
 import { useState, useEffect } from "react";
 
-type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "dark" | "sepia";
+
+const STORAGE_KEY = "irm-theme";
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme") as Theme;
-      return stored || "system";
-    }
-    return "system";
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+    if (stored === "light" || stored === "dark" || stored === "sepia") return stored;
+    return "light";
   });
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    
-    const applyTheme = (theme: Theme) => {
-      root.classList.remove("light", "dark");
-      
-      if (theme === "system") {
-        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-        root.classList.add(systemTheme);
-      } else {
-        root.classList.add(theme);
-      }
-    };
-
-    applyTheme(theme);
-    localStorage.setItem("theme", theme);
-
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => {
-      if (theme === "system") {
-        applyTheme("system");
-      }
-    };
-
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  return { theme, setTheme };
+  return { theme, setTheme: setThemeState };
 }

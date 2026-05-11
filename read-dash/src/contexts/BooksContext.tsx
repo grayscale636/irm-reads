@@ -134,6 +134,15 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       await createReadingLog(id, book.pagesRead, updates.pagesRead);
     }
     
+    // Auto-complete when pagesRead reaches totalPages (100%)
+    if (updated.pagesRead >= updated.totalPages && updated.status !== "completed") {
+      updated.status = "completed";
+      updated.progress = 100;
+      if (!updated.finishedAt) {
+        updated.finishedAt = new Date().toISOString().split('T')[0];
+      }
+    }
+    
     // Auto-set finished date when completed
     if (updates.status === "completed" && !updated.finishedAt) {
       updated.finishedAt = new Date().toISOString().split('T')[0];
@@ -176,6 +185,16 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     if (book && endPage > book.pagesRead) {
       const updated = { ...book, pagesRead: endPage };
       updated.progress = Math.round((updated.pagesRead / updated.totalPages) * 100);
+      
+      // Auto-complete when pagesRead reaches totalPages (100%)
+      if (updated.pagesRead >= updated.totalPages && updated.status !== "completed") {
+        updated.status = "completed";
+        updated.progress = 100;
+        if (!updated.finishedAt) {
+          updated.finishedAt = new Date().toISOString().split('T')[0];
+        }
+      }
+      
       await apiUpdateBook(bookId, updated);
       setBooks((prev) =>
         prev.map((b) => (b.id === bookId ? updated : b))
