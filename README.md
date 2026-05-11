@@ -59,7 +59,7 @@ pm2 save
 | Service | Development | Production |
 |---------|-------------|------------|
 | Frontend | http://localhost:5173 | http://localhost:8080 |
-| API | http://localhost:8114 | http://localhost:8114 |
+| API | http://localhost:8211 | http://localhost:8211 |
 
 ## ✨ Features
 
