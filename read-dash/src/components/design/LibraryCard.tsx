@@ -7,6 +7,8 @@ const STATUS_LABEL: Record<BookData["status"], string> = {
   reading: "Reading",
   completed: "Completed",
   "want-to-read": "Want to read",
+  paused: "Paused",
+  dnf: "DNF",
 };
 
 interface Props {
@@ -63,6 +65,17 @@ export function LibraryCard({ book, onClick }: Props) {
             <div className="irm-progress" style={{ height: 3 }}>
               <div className="irm-progress__fill" style={{ width: 0 }}></div>
             </div>
+          </div>
+        )}
+        {(book.status === "paused" || book.status === "dnf") && (
+          <div className="irm-libcard__progress">
+            <div className="irm-libcard__progress-row">
+              <span className="irm-mono">
+                {book.pagesRead} / {book.totalPages}
+              </span>
+              <span className="irm-mono">{pct}%</span>
+            </div>
+            <ProgressBar value={book.pagesRead} max={book.totalPages} height={3} />
           </div>
         )}
       </div>

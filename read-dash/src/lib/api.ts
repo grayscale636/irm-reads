@@ -18,7 +18,7 @@ export interface Book {
   cover?: string;
   rating: number;
   progress: number;
-  status: 'reading' | 'completed' | 'want-to-read';
+  status: 'reading' | 'completed' | 'want-to-read' | 'paused' | 'dnf';
   pagesRead: number;
   totalPages: number;
   reflection?: string;

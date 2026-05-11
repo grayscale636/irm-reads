@@ -162,7 +162,9 @@ export default function BookDetail() {
               >
                 <option value="want-to-read">Want to read</option>
                 <option value="reading">Reading</option>
+                <option value="paused">Paused</option>
                 <option value="completed">Completed</option>
+                <option value="dnf">DNF (Did not finish)</option>
               </select>
             </div>
 

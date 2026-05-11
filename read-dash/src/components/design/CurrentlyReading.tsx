@@ -10,6 +10,7 @@ interface Props {
   today: string;
   onLogReading: (bookId: string) => void;
   onOpenBook?: (bookId: string) => void;
+  onChangeStatus?: (bookId: string, status: BookData["status"]) => void;
 }
 
 const STALL_LABEL: Record<string, string> = {
@@ -19,7 +20,7 @@ const STALL_LABEL: Record<string, string> = {
   frozen: "Frozen",
 };
 
-export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook }: Props) {
+export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook, onChangeStatus }: Props) {
   const reading = books.filter((b) => b.status === "reading");
 
   if (reading.length === 0) {
@@ -150,6 +151,33 @@ export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook 
                     <Icon.Plus size={13} /> Log
                   </button>
                 </div>
+                {(stall.level === "stalled" || stall.level === "frozen") && onChangeStatus && (
+                  <div className="irm-bookcard__actions">
+                    <span className="irm-bookcard__actions-prompt">
+                      {stall.level === "frozen" ? "Time to decide?" : "Want to pause?"}
+                    </span>
+                    <button
+                      className="irm-btn irm-btn--ghost irm-bookcard__action"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onChangeStatus(book.id, "paused");
+                      }}
+                    >
+                      Pause
+                    </button>
+                    <button
+                      className="irm-btn irm-btn--danger irm-bookcard__action"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Mark "${book.title}" as DNF (Did Not Finish)?`)) {
+                          onChangeStatus(book.id, "dnf");
+                        }
+                      }}
+                    >
+                      Mark DNF
+                    </button>
+                  </div>
+                )}
               </div>
             </article>
           );

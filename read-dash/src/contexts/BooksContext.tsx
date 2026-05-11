@@ -18,7 +18,7 @@ export interface BookData {
   cover: string;
   rating: number;
   progress: number;
-  status: "reading" | "completed" | "want-to-read";
+  status: "reading" | "completed" | "want-to-read" | "paused" | "dnf";
   pagesRead: number;
   totalPages: number;
   reflection?: string;
@@ -48,6 +48,8 @@ interface BooksContextType {
     totalBooks: number;
     booksReading: number;
     booksWantToRead: number;
+    booksPaused: number;
+    booksDnf: number;
   };
   addBook: (book: Omit<BookData, "id">) => Promise<BookData>;
   updateBook: (id: string, updates: Partial<BookData>) => Promise<void>;
@@ -220,7 +222,9 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       : 0,
     totalBooks: books.length,
     booksReading: books.filter((b) => b.status === "reading").length,
-    booksWantToRead: books.filter((b) => b.status === "want-to-read").length
+    booksWantToRead: books.filter((b) => b.status === "want-to-read").length,
+    booksPaused: books.filter((b) => b.status === "paused").length,
+    booksDnf: books.filter((b) => b.status === "dnf").length,
   };
 
   return (
