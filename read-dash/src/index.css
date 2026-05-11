@@ -982,6 +982,41 @@ button { font-family: inherit; }
 [data-theme="dark"] .irm-pill--completed { background: oklch(0.30 0.08 145); color: oklch(0.85 0.10 145); }
 [data-theme="sepia"] .irm-pill--completed { background: oklch(0.88 0.08 110); color: oklch(0.40 0.10 110); }
 
+/* Stall state pills (replace "Reading" when book is in-progress) */
+.irm-pill--fresh { background: var(--accent-soft); color: var(--accent); }
+.irm-pill--cooling { background: oklch(0.94 0.07 85); color: oklch(0.45 0.12 75); }
+.irm-pill--stalled { background: oklch(0.93 0.09 55); color: oklch(0.48 0.15 45); }
+.irm-pill--frozen { background: oklch(0.93 0.07 25); color: oklch(0.48 0.16 25); }
+[data-theme="dark"] .irm-pill--cooling { background: oklch(0.32 0.06 85); color: oklch(0.85 0.10 85); }
+[data-theme="dark"] .irm-pill--stalled { background: oklch(0.34 0.09 50); color: oklch(0.86 0.12 60); }
+[data-theme="dark"] .irm-pill--frozen { background: oklch(0.34 0.10 25); color: oklch(0.86 0.13 25); }
+[data-theme="sepia"] .irm-pill--cooling { background: oklch(0.90 0.07 80); color: oklch(0.42 0.12 75); }
+[data-theme="sepia"] .irm-pill--stalled { background: oklch(0.88 0.10 55); color: oklch(0.42 0.15 45); }
+[data-theme="sepia"] .irm-pill--frozen { background: oklch(0.88 0.08 25); color: oklch(0.42 0.16 25); }
+
+/* Card emphasis when book needs attention */
+.irm-bookcard--stalled { border-color: oklch(0.85 0.10 55); }
+.irm-bookcard--frozen { border-color: oklch(0.83 0.12 25); }
+[data-theme="dark"] .irm-bookcard--stalled { border-color: oklch(0.40 0.08 50); }
+[data-theme="dark"] .irm-bookcard--frozen { border-color: oklch(0.40 0.10 25); }
+
+/* Projected-finish row inside the book card */
+.irm-bookcard__projection {
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.irm-bookcard__projection-eta { color: var(--ink); font-weight: 500; }
+.irm-bookcard__projection-pace { color: var(--ink-muted); }
+.irm-bookcard__last--warn { color: oklch(0.48 0.15 45); }
+[data-theme="dark"] .irm-bookcard__last--warn { color: oklch(0.80 0.12 55); }
+
+.irm-section-sub__warn { color: oklch(0.48 0.15 45); }
+[data-theme="dark"] .irm-section-sub__warn { color: oklch(0.80 0.12 55); }
+
 /* ── Stars ──────────────────────────── */
 .irm-stars { display: inline-flex; gap: 2px; }
 .irm-stars__btn {

@@ -2,6 +2,7 @@ import type { BookData, ReadingLogData } from "@/contexts/BooksContext";
 import { BookCover } from "./BookCover";
 import { ProgressBar } from "./ProgressBar";
 import { Icon } from "./Icons";
+import { projectFinish, stallStatus, formatEta } from "@/lib/readingInsights";
 
 interface Props {
   books: BookData[];
@@ -10,6 +11,13 @@ interface Props {
   onLogReading: (bookId: string) => void;
   onOpenBook?: (bookId: string) => void;
 }
+
+const STALL_LABEL: Record<string, string> = {
+  fresh: "Reading",
+  cooling: "Cooling",
+  stalled: "Stalled",
+  frozen: "Frozen",
+};
 
 export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook }: Props) {
   const reading = books.filter((b) => b.status === "reading");
@@ -33,6 +41,12 @@ export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook 
     );
   }
 
+  // Surface count of books that need attention (stalled or frozen).
+  const needAttention = reading.filter((b) => {
+    const s = stallStatus(b, logs, today);
+    return s.level === "stalled" || s.level === "frozen";
+  }).length;
+
   return (
     <section>
       <div className="irm-section-head">
@@ -40,6 +54,14 @@ export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook 
           <h2 className="irm-section-title">Currently reading</h2>
           <p className="irm-section-sub">
             <span className="irm-mono">{reading.length}</span> book{reading.length === 1 ? "" : "s"} in progress
+            {needAttention > 0 && (
+              <>
+                {" · "}
+                <span className="irm-section-sub__warn">
+                  <span className="irm-mono">{needAttention}</span> need{needAttention === 1 ? "s" : ""} attention
+                </span>
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -48,26 +70,22 @@ export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook 
         {reading.map((book) => {
           const total = book.totalPages || 1;
           const pct = Math.round((book.pagesRead / total) * 100);
-          const bookLogs = logs.filter((l) => l.bookId === book.id);
-          const lastDate = bookLogs.length
-            ? bookLogs.slice().sort((a, b) => b.date.localeCompare(a.date))[0].date
-            : null;
-          const daysAgo = lastDate
-            ? Math.round((new Date(today).getTime() - new Date(lastDate).getTime()) / 86400000)
-            : null;
+          const stall = stallStatus(book, logs, today);
+          const projection = projectFinish(book, logs, today);
+
           const lastLabel =
-            daysAgo === null
+            stall.daysSinceLast === null
               ? "—"
-              : daysAgo === 0
+              : stall.daysSinceLast === 0
                 ? "Today"
-                : daysAgo === 1
+                : stall.daysSinceLast === 1
                   ? "Yesterday"
-                  : `${daysAgo}d ago`;
+                  : `${stall.daysSinceLast}d ago`;
 
           return (
             <article
               key={book.id}
-              className="irm-bookcard"
+              className={`irm-bookcard irm-bookcard--${stall.level}`}
               onClick={() => onOpenBook?.(book.id)}
               style={onOpenBook ? { cursor: "pointer" } : undefined}
             >
@@ -78,7 +96,7 @@ export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook 
                     <h3 className="irm-bookcard__title">{book.title}</h3>
                     <p className="irm-bookcard__author">{book.author}</p>
                   </div>
-                  <span className="irm-pill">Reading</span>
+                  <span className={`irm-pill irm-pill--${stall.level}`}>{STALL_LABEL[stall.level]}</span>
                 </div>
                 <div className="irm-bookcard__progress">
                   <div className="irm-bookcard__progress-row">
@@ -89,10 +107,34 @@ export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook 
                   </div>
                   <ProgressBar value={book.pagesRead} max={book.totalPages} height={3} />
                 </div>
+                <div className="irm-bookcard__projection">
+                  {projection ? (
+                    <>
+                      <span className="irm-bookcard__metalabel">Projected finish</span>
+                      <span className="irm-mono irm-bookcard__projection-eta">
+                        {formatEta(projection.etaDate, today)}
+                      </span>
+                      <span className="irm-bookcard__projection-pace">
+                        @ <span className="irm-mono">{projection.pagesPerDay.toFixed(1)}</span> pg/day
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="irm-bookcard__metalabel">Projected finish</span>
+                      <span className="irm-bookcard__projection-pace">
+                        Log a session to project pace
+                      </span>
+                    </>
+                  )}
+                </div>
                 <div className="irm-bookcard__meta">
                   <span className="irm-bookcard__metaitem">
                     <span className="irm-bookcard__metalabel">Last session</span>
-                    <span className="irm-mono">{lastLabel}</span>
+                    <span
+                      className={`irm-mono${stall.level === "stalled" || stall.level === "frozen" ? " irm-bookcard__last--warn" : ""}`}
+                    >
+                      {lastLabel}
+                    </span>
                   </span>
                   <span className="irm-bookcard__metaitem">
                     <span className="irm-bookcard__metalabel">Started</span>
