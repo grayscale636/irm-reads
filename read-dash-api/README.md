@@ -26,7 +26,7 @@ DB_PORT=5432
 DB_NAME=irmreads
 DB_USER=postgres
 DB_PASSWORD=your_password
-PORT=8114
+PORT=8211
 JWT_SECRET=your-super-secret-key-min-32-chars
 
 # Production
