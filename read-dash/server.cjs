@@ -1,24 +1,13 @@
-const { exec } = require('child_process');
-const path = require('path');
+const { execSync } = require('child_process');
+const PORT = process.env.PORT || 8210;
 
-const distPath = path.join(__dirname, 'dist');
-const port = process.env.PORT || 8080;
-
-// Use vite preview
-const vite = exec(`npx vite preview --port ${port} --host`, {
-  cwd: __dirname,
-  stdio: 'inherit'
-});
-
-vite.stdout?.pipe(process.stdout);
-vite.stderr?.pipe(process.stderr);
-
-vite.on('error', (err) => {
-  console.error('Failed to start:', err);
+try {
+  // Use serve for more reliable static file serving
+  execSync(`npx serve dist -l ${PORT} -s`, { 
+    stdio: 'inherit',
+    cwd: __dirname
+  });
+} catch (error) {
+  console.error('Failed to start server:', error.message);
   process.exit(1);
-});
-
-process.on('SIGTERM', () => {
-  vite.kill();
-  process.exit(0);
-});
+}

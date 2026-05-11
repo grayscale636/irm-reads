@@ -1,5 +1,5 @@
 // PostgreSQL API Client
-const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.100.118:8114/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://192.168.100.220:8211/api';
 
 // Helper to get auth headers
 function getAuthHeaders(): HeadersInit {

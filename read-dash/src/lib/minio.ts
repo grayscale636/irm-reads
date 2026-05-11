@@ -1,105 +1,72 @@
-// MinIO Configuration - menggunakan FastAPI backend sebagai proxy
-const API_ENDPOINT = "http://192.168.100.220:8113";
+// ===============================
+// 🔥 MinIO Client Utility (Frontend)
+// ===============================
 
-export interface UploadResult {
-  success: boolean;
-  url?: string;
-  error?: string;
-}
+export const MINIO_API = "https://uploads.irmlabs.my.id"; // bisa pakai domain Cloudflare Tunnel
 
-// Compress image sebelum upload
-async function compressImage(file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d')!;
-    const img = new Image();
-    
-    img.onload = () => {
-      let { width, height } = img;
-      
-      // Calculate new dimensions
-      if (width > maxWidth) {
-        height = (height * maxWidth) / width;
-        width = maxWidth;
-      }
-      if (height > maxHeight) {
-        width = (width * maxHeight) / height;
-        height = maxHeight;
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Failed to compress image'));
-        },
-        'image/jpeg',
-        quality
-      );
-    };
-    
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
+// Secure API Key buat akses upload
+export const API_KEY = import.meta.env.VITE_MINIO_API_KEY;
+
+// -------------------------------------------------------------------------------------------------
+export async function uploadToMinio(file: File, bucket: string): Promise<string> {
+  if (!file) throw new Error("No file selected.");
+  if (!API_KEY) throw new Error("Missing VITE_MINIO_API_KEY.");
+
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(`${MINIO_API}/upload?bucket=${bucket}`, {
+    method: "POST",
+    headers: { "x-api-key": API_KEY },
+    body: form,
   });
-}
 
-// Generate unique filename - selalu pakai .jpg karena sudah di-compress ke JPEG
-function generateFileName(originalName: string): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  return `cover-${timestamp}-${random}.jpg`;
-}
+  if (!res.ok) throw new Error(`Upload failed: ${await res.text()}`);
 
-// Upload image via FastAPI backend
-export async function uploadToMinio(file: File): Promise<UploadResult> {
-  try {
-    // Compress image first (max 400x600, 80% quality)
-    const compressedBlob = await compressImage(file, 400, 600, 0.8);
-    const fileName = generateFileName(file.name);
-    
-    // Create FormData untuk upload
-    const formData = new FormData();
-    formData.append('file', compressedBlob, fileName);
+  const data = await res.json();
+  console.log("MinIO upload response:", data);
 
-    const response = await fetch(`${API_ENDPOINT}/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        success: true,
-        url: data.file_url
-      };
-    } else {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Upload failed:', errorData);
-      return {
-        success: false,
-        error: errorData.error || `Upload failed: ${response.status}`
-      };
-    }
-  } catch (error) {
-    console.error('Upload error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Upload failed'
-    };
+  // ===== RETURN FINAL PUBLIC URL =====
+  const url = data.url || data.file_url || data.fileUrl || data.publicUrl || data.link;
+  if (!url) {
+    throw new Error(`Upload succeeded but no URL in response: ${JSON.stringify(data)}`);
   }
+  return url;
 }
 
-// Delete image - perlu endpoint delete di FastAPI backend
-export async function deleteFromMinio(imageUrl: string): Promise<boolean> {
-  // TODO: Implement delete endpoint di FastAPI backend jika diperlukan
-  console.log('Delete not implemented yet for:', imageUrl);
-  return true;
+// -------------------------------------------------------------------------------------------------
+// 🗑 Delete file dari MinIO
+// url contoh: DELETE https://uploads.irmlabs.my.id/delete?bucket=mybucket&file=nama.png
+// -------------------------------------------------------------------------------------------------
+export async function deleteFromMinio(url: string, bucket: string): Promise<boolean> {
+  if (!isMinioUrl(url)) return false;
+
+  const file = url.split("/").pop(); // extract filename
+  if (!file) return false;
+
+  const res = await fetch(`${MINIO_API}/delete?bucket=${bucket}&file=${file}`, {
+    method: "DELETE",
+    headers: { "x-api-key": API_KEY },
+  });
+
+  return res.ok;
 }
 
-// Check if URL is from MinIO
-export function isMinioUrl(url: string): boolean {
-  return url.includes('192.168.100.220:8111') || url.includes('mybucket') || url.includes('X-Amz-');
+// -------------------------------------------------------------------------------------------------
+// 🔍 Cek apakah URL itu file dari MinIO
+// -------------------------------------------------------------------------------------------------
+export function isMinioUrl(url?: string | null): boolean {
+  if (!url) return false;
+  return (
+    url.includes("storage.irmlabs.my.id") ||
+    url.includes("uploads.irmlabs.my.id") ||
+    url.includes("minio.irmlabs.my.id")
+  );
 }
+
+export default {
+  uploadToMinio,
+  deleteFromMinio,
+  isMinioUrl,
+};
+
