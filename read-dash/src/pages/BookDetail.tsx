@@ -59,7 +59,18 @@ export default function BookDetail() {
     .filter((l) => l.bookId === book.id)
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date));
-  const quotes = book.quotes || [];
+  const quotes: string[] = Array.isArray(book.quotes)
+    ? book.quotes
+    : typeof book.quotes === "string"
+    ? (() => {
+        try {
+          const parsed = JSON.parse(book.quotes);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })()
+    : [];
 
   const savePages = async () => {
     const n = Math.max(0, Math.min(book.totalPages, parseInt(pagesInput, 10) || 0));
