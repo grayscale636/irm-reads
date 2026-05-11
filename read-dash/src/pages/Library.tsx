@@ -5,20 +5,33 @@ import type { OutletCtx } from "@/layouts/AppLayout";
 import { Icon } from "@/components/design/Icons";
 import { LibraryCard } from "@/components/design/LibraryCard";
 
-type Filter = "all" | "reading" | "completed" | "want-to-read";
+type Filter = "all" | "reading" | "completed" | "want-to-read" | "paused" | "dnf";
+type SortKey = "recent" | "title" | "author" | "rating" | "progress" | "pages";
 
 const TABS: Array<{ id: Filter; label: string }> = [
   { id: "all", label: "All" },
   { id: "reading", label: "Reading" },
+  { id: "paused", label: "Paused" },
   { id: "completed", label: "Completed" },
   { id: "want-to-read", label: "Want to read" },
+  { id: "dnf", label: "DNF" },
+];
+
+const SORTS: Array<{ id: SortKey; label: string }> = [
+  { id: "recent", label: "Recently active" },
+  { id: "title", label: "Title (A→Z)" },
+  { id: "author", label: "Author (A→Z)" },
+  { id: "rating", label: "Rating (high→low)" },
+  { id: "progress", label: "Progress (high→low)" },
+  { id: "pages", label: "Length (longest)" },
 ];
 
 export default function Library() {
   const navigate = useNavigate();
   const { searchQuery, openAddBookDialog } = useOutletContext<OutletCtx>();
-  const { books, isLoading } = useBooks();
+  const { books, readingLogs, isLoading } = useBooks();
   const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<SortKey>("recent");
 
   const counts = useMemo(
     () => ({
@@ -26,9 +39,21 @@ export default function Library() {
       reading: books.filter((b) => b.status === "reading").length,
       completed: books.filter((b) => b.status === "completed").length,
       "want-to-read": books.filter((b) => b.status === "want-to-read").length,
+      paused: books.filter((b) => b.status === "paused").length,
+      dnf: books.filter((b) => b.status === "dnf").length,
     }),
     [books],
   );
+
+  // Map each book to its most recent log date for the "recent activity" sort.
+  const lastActivity = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const l of readingLogs) {
+      const prev = map.get(l.bookId);
+      if (!prev || l.date > prev) map.set(l.bookId, l.date);
+    }
+    return map;
+  }, [readingLogs]);
 
   const filtered = useMemo(() => {
     let result = filter === "all" ? books : books.filter((b) => b.status === filter);
@@ -38,8 +63,36 @@ export default function Library() {
         (b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q),
       );
     }
-    return result;
-  }, [books, filter, searchQuery]);
+    const sorted = [...result];
+    switch (sort) {
+      case "title":
+        sorted.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case "author":
+        sorted.sort((a, b) => a.author.localeCompare(b.author) || a.title.localeCompare(b.title));
+        break;
+      case "rating":
+        sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title));
+        break;
+      case "progress":
+        sorted.sort((a, b) => (b.progress || 0) - (a.progress || 0));
+        break;
+      case "pages":
+        sorted.sort((a, b) => (b.totalPages || 0) - (a.totalPages || 0));
+        break;
+      case "recent":
+      default: {
+        const fallback = (b: typeof books[number]) =>
+          b.finishedAt || b.startedAt || "";
+        sorted.sort((a, b) => {
+          const ad = lastActivity.get(a.id) || fallback(a);
+          const bd = lastActivity.get(b.id) || fallback(b);
+          return bd.localeCompare(ad);
+        });
+      }
+    }
+    return sorted;
+  }, [books, filter, searchQuery, sort, lastActivity]);
 
   if (isLoading) {
     return (
@@ -74,6 +127,18 @@ export default function Library() {
             <span className="irm-tab__count irm-mono">{counts[tab.id]}</span>
           </button>
         ))}
+        <label className="irm-sort">
+          <span className="irm-sort__label">Sort by</span>
+          <select
+            className="irm-sort__select"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+          >
+            {SORTS.map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {filtered.length === 0 ? (
