@@ -23,7 +23,7 @@ npm install
 Create a `.env` file:
 
 ```env
-VITE_API_URL=http://localhost:8114/api
+VITE_API_URL=http://localhost:8211/api
 ```
 
 ## 🚀 Running
