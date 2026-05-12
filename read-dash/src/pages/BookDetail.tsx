@@ -6,7 +6,46 @@ import { Icon } from "@/components/design/Icons";
 import { BookCover } from "@/components/design/BookCover";
 import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
+import { PaceChart } from "@/components/design/PaceChart";
 import { getBookNotes, addBookNote, deleteBookNote, type BookNote } from "@/lib/api";
+
+function Collapsible({ open: initOpen, title, subtitle, count, children, onAdd }: {
+  open?: boolean;
+  title: string;
+  subtitle: string;
+  count?: number;
+  children: React.ReactNode;
+  onAdd?: () => void;
+}) {
+  const [open, setOpen] = useState(initOpen ?? true);
+  return (
+    <section className="irm-card">
+      <button className="irm-section-head irm-section-head--clickable" onClick={() => setOpen(!open)}>
+        <div className="irm-section-head__left">
+          <h2 className="irm-section-title">{title}</h2>
+          <p className="irm-section-sub">
+            {count !== undefined && <span className="irm-mono">{count}</span>} {subtitle}
+          </p>
+        </div>
+        <div className="irm-section-head__right">
+          {onAdd && (
+            <span className="irm-btn irm-btn--ghost" onClick={(e) => { e.stopPropagation(); onAdd(); }}>
+              <Icon.Plus size={13} /> Add
+            </span>
+          )}
+          <span className="irm-chevron" data-open={open}>
+            <Icon.ChevronRight size={14} />
+          </span>
+        </div>
+      </button>
+      <div className="irm-collapse" data-open={open}>
+        <div className="irm-collapse__inner">
+          {children}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function BookDetail() {
   const { id } = useParams<{ id: string }>();
@@ -263,22 +302,21 @@ export default function BookDetail() {
                 </label>
               </div>
             )}
+
+            {/* Reading pace chart */}
+            {bookLogs.length >= 2 && (
+              <PaceChart logs={bookLogs} />
+            )}
           </section>
 
-          <section className="irm-card">
-            <div className="irm-section-head">
-              <div>
-                <h2 className="irm-section-title">Notes</h2>
-                <p className="irm-section-sub">
-                  <span className="irm-mono">{notes.length}</span> entries
-                </p>
-              </div>
-              {!showNoteForm && (
-                <button className="irm-btn irm-btn--ghost" onClick={() => setShowNoteForm(true)}>
-                  <Icon.Plus size={13} /> Add note
-                </button>
-              )}
-            </div>
+          {/* ── Notes (always open, collapsible) ── */}
+          <Collapsible
+            open
+            title="Notes"
+            subtitle="entries"
+            count={notes.length}
+            onAdd={() => setShowNoteForm(true)}
+          >
             {showNoteForm && (
               <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
                 <textarea
@@ -322,46 +360,38 @@ export default function BookDetail() {
             ) : notes.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
                 <div className="irm-empty__text">No notes yet.</div>
-                <button className="irm-btn irm-btn--ghost" onClick={() => setShowNoteForm(true)}>
-                  <Icon.Plus size={13} /> Add note
-                </button>
               </div>
             ) : (
-              <ul className="irm-quotes">
+              <div className="irm-notes">
                 {notes.map((n) => (
-                  <li key={n.id} className="irm-quote">
-                    <div className="irm-quote__mark">✎</div>
-                    <div className="irm-quote__body">
-                      <p className="irm-quote__text">{n.text}</p>
-                      <span className="irm-mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        {new Date(n.createdAt).toLocaleDateString("en-ID", {
-                          month: "short", day: "numeric"
-                        })}
-                      </span>
+                  <div key={n.id} className="irm-note">
+                    <div className="irm-note__head">
+                      <div className="irm-note__meta">
+                        <Icon.ChevronRight size={12} />
+                        <span className="irm-note__date">
+                          {new Date(n.createdAt).toLocaleDateString("en-ID", {
+                            month: "short", day: "numeric"
+                          })}
+                        </span>
+                      </div>
+                      <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
+                        <Icon.Trash size={13} />
+                      </button>
                     </div>
-                    <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
-                      <Icon.Trash size={14} />
-                    </button>
-                  </li>
+                    <p className="irm-note__text">{n.text}</p>
+                  </div>
                 ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="irm-card">
-            <div className="irm-section-head">
-              <div>
-                <h2 className="irm-section-title">Quotes</h2>
-                <p className="irm-section-sub">
-                  <span className="irm-mono">{quotes.length}</span> saved
-                </p>
               </div>
-              {!showQuoteForm && (
-                <button className="irm-btn irm-btn--ghost" onClick={() => setShowQuoteForm(true)}>
-                  <Icon.Plus size={13} /> Add quote
-                </button>
-              )}
-            </div>
+            )}
+          </Collapsible>
+
+          {/* ── Quotes ── */}
+          <Collapsible
+            title="Quotes"
+            subtitle="saved"
+            count={quotes.length}
+            onAdd={() => setShowQuoteForm(true)}
+          >
             {showQuoteForm && (
               <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
                 <textarea
@@ -411,17 +441,14 @@ export default function BookDetail() {
                 ))}
               </ul>
             )}
-          </section>
+          </Collapsible>
 
-          <section className="irm-card">
-            <div className="irm-section-head">
-              <div>
-                <h2 className="irm-section-title">Reading history</h2>
-                <p className="irm-section-sub">
-                  <span className="irm-mono">{bookLogs.length}</span> sessions
-                </p>
-              </div>
-            </div>
+          {/* ── Reading history ── */}
+          <Collapsible
+            title="Reading history"
+            subtitle="sessions"
+            count={bookLogs.length}
+          >
             {bookLogs.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
                 <div className="irm-empty__text">No reading logged yet.</div>
@@ -450,7 +477,7 @@ export default function BookDetail() {
                 )}
               </ul>
             )}
-          </section>
+          </Collapsible>
         </div>
       </div>
     </div>

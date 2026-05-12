@@ -1706,6 +1706,108 @@ button { font-family: inherit; }
 .irm-quote .irm-logitem__delete { align-self: flex-start; opacity: 0; }
 .irm-quote:hover .irm-logitem__delete { opacity: 1; }
 
+/* ── Collapsible section ───────────────────────── */
+.irm-section-head--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.irm-section-head--clickable:hover {
+  opacity: 0.8;
+}
+.irm-section-head__left { flex: 1; }
+.irm-section-head__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.irm-chevron {
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+  color: var(--ink-muted);
+}
+.irm-chevron[data-open="false"] {
+  transform: rotate(0deg);
+}
+.irm-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+.irm-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.irm-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.irm-collapse__inner {
+  overflow: hidden;
+}
+
+/* ── Pace Chart ───────────────────────────────── */
+.irm-pace {
+  margin-top: 12px;
+  padding: 8px 0;
+}
+.irm-pace__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ── Notes (multi-entry) ───────────────────────── */
+.irm-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.irm-notes::-webkit-scrollbar {
+  width: 4px;
+}
+.irm-notes::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.irm-note {
+  background: var(--bg-sunken);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.irm-note__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.irm-note__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+.irm-note__date {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  opacity: 0.65;
+}
+.irm-note__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+.irm-note .irm-logitem__delete {
+  opacity: 0;
+}
+.irm-note:hover .irm-logitem__delete {
+  opacity: 1;
+}
+
 /* ── Reading history ──────────────────────────── */
 .irm-history {
   list-style: none;
