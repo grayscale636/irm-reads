@@ -1741,28 +1741,53 @@ button { font-family: inherit; }
 }
 .irm-pace__svg {
   width: 100%;
-  height: 200px;
+  height: 140px;
   display: block;
   overflow: visible;
 }
 .irm-pace__svg rect {
   cursor: crosshair;
 }
-.irm-pace__line {
-  stroke-dasharray: 1200;
-  stroke-dashoffset: 1200;
-  animation: pace-draw 1.2s ease-out forwards;
+.irm-pace__bar-rect {
+  transition: opacity 0.12s ease;
 }
-.irm-pace__area {
+.irm-pace__ma {
   opacity: 0;
-  animation: pace-fade 0.9s ease-out 0.4s forwards;
-}
-@keyframes pace-draw {
-  to { stroke-dashoffset: 0; }
+  animation: pace-fade 0.6s ease-out 0.2s forwards;
 }
 @keyframes pace-fade {
   to { opacity: 1; }
 }
+.irm-pace__trend {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+.irm-pace__trend--up { color: oklch(0.62 0.16 145); }
+.irm-pace__trend--down { color: oklch(0.62 0.18 25); }
+.irm-pace__trend-label {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.irm-pace__tooltip-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 11px;
+}
+.irm-pace__tooltip-meta-label {
+  color: var(--ink-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.irm-pace__delta {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--ink);
+}
+.irm-pace__delta--up { color: oklch(0.62 0.16 145); }
+.irm-pace__delta--down { color: oklch(0.62 0.18 25); }
 .irm-pace__tooltip {
   position: absolute;
   pointer-events: none;

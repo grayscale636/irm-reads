@@ -9,13 +9,15 @@ interface Props {
 interface DayPoint {
   date: string;
   pages: number;
+  ma: number; // 7-day moving average
   x: number;
   y: number;
+  maY: number;
 }
 
 const VB_W = 640;
-const VB_H = 200;
-const PAD = { top: 18, right: 16, bottom: 26, left: 28 };
+const VB_H = 140;
+const PAD = { top: 14, right: 12, bottom: 22, left: 28 };
 
 function formatTooltipDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -34,7 +36,6 @@ function formatAxisDate(iso: string): string {
   return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-// Build a smooth cubic-bezier path through the given points (Catmull-Rom → Bezier).
 function smoothPath(pts: { x: number; y: number }[]): string {
   if (pts.length === 0) return "";
   if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
@@ -77,14 +78,24 @@ export function PaceChart({ logs, today }: Props) {
     const avg = total / days.length;
     const peak = days.reduce((a, b) => (b.pages > a.pages ? b : a));
 
-    // Nice ticks for the y axis: 4 evenly-spaced lines including 0 and ceil(max).
+    // 7-point trailing moving average to surface trend.
+    const window = Math.min(7, Math.max(3, Math.floor(days.length / 4)));
+    const ma: number[] = days.map((_, i) => {
+      const start = Math.max(0, i - window + 1);
+      const slice = days.slice(start, i + 1);
+      return slice.reduce((s, d) => s + d.pages, 0) / slice.length;
+    });
+
+    // Trend delta: last MA value vs the MA at the midpoint.
+    const trendDelta = ma[ma.length - 1] - ma[Math.floor(ma.length / 2)];
+
     const niceMax = (() => {
       const step = Math.pow(10, Math.floor(Math.log10(max || 1)));
       const m = max / step;
       const niceM = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
       return niceM * step;
     })();
-    const yTicks = [0, niceMax / 3, (niceMax * 2) / 3, niceMax];
+    const yTicks = [0, niceMax / 2, niceMax];
 
     const innerW = VB_W - PAD.left - PAD.right;
     const innerH = VB_H - PAD.top - PAD.bottom;
@@ -92,20 +103,48 @@ export function PaceChart({ logs, today }: Props) {
 
     const points: DayPoint[] = days.map((d, i) => ({
       ...d,
+      ma: ma[i],
       x: PAD.left + i * stepX,
       y: PAD.top + innerH - (d.pages / niceMax) * innerH,
+      maY: PAD.top + innerH - (ma[i] / niceMax) * innerH,
     }));
 
-    return { points, niceMax, yTicks, total, avg, peak, innerH, innerW };
+    const avgY = PAD.top + innerH - (avg / niceMax) * innerH;
+    const barW = Math.max(2, Math.min(8, (stepX || innerW) * 0.55));
+
+    return {
+      points,
+      niceMax,
+      yTicks,
+      total,
+      avg,
+      avgY,
+      peak,
+      innerH,
+      innerW,
+      barW,
+      window,
+      trendDelta,
+    };
   }, [logs]);
 
   if (!data) return null;
-  const { points, yTicks, niceMax, total, avg, peak, innerH } = data;
+  const {
+    points,
+    yTicks,
+    niceMax,
+    total,
+    avg,
+    avgY,
+    peak,
+    innerH,
+    barW,
+    window,
+    trendDelta,
+  } = data;
 
-  const linePath = smoothPath(points);
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${PAD.top + innerH} L ${points[0].x} ${PAD.top + innerH} Z`;
+  const maPath = smoothPath(points.map((p) => ({ x: p.x, y: p.maY })));
 
-  // Map a clientX to nearest data index.
   function onMove(e: React.MouseEvent<SVGRectElement>) {
     const svg = svgRef.current;
     if (!svg) return;
@@ -127,9 +166,11 @@ export function PaceChart({ logs, today }: Props) {
   const hover = hoverIdx !== null ? points[hoverIdx] : null;
   const todayPoint =
     today != null ? points.find((p) => p.date === today) ?? null : null;
-
-  // Tooltip placement: prefer right of crosshair, flip if too close to right edge.
   const tooltipFlip = hover ? hover.x > VB_W - 140 : false;
+
+  const trendPct = avg > 0 ? Math.round((trendDelta / avg) * 100) : 0;
+  const trendUp = trendDelta >= 0;
+  const last7 = points.slice(-7).reduce((s, p) => s + p.pages, 0);
 
   return (
     <div className="irm-pace">
@@ -138,6 +179,19 @@ export function PaceChart({ logs, today }: Props) {
           <div className="irm-pace__title">Reading pace</div>
           <div className="irm-pace__sub">
             <span className="irm-mono">{points.length}</span> active days
+            {points.length >= 4 && (
+              <>
+                {" · "}
+                <span
+                  className={`irm-pace__trend irm-pace__trend--${
+                    trendUp ? "up" : "down"
+                  }`}
+                >
+                  {trendUp ? "▲" : "▼"} {Math.abs(trendPct)}%
+                </span>{" "}
+                <span className="irm-pace__trend-label">trend</span>
+              </>
+            )}
           </div>
         </div>
         <div className="irm-pace__stats">
@@ -153,9 +207,15 @@ export function PaceChart({ logs, today }: Props) {
           </div>
           <div className="irm-pace__stat">
             <span className="irm-pace__stat-num irm-mono">
+              {last7.toLocaleString()}
+            </span>
+            <span className="irm-pace__stat-label">last 7d</span>
+          </div>
+          <div className="irm-pace__stat">
+            <span className="irm-pace__stat-num irm-mono">
               {total.toLocaleString()}
             </span>
-            <span className="irm-pace__stat-label">total pages</span>
+            <span className="irm-pace__stat-label">total</span>
           </div>
         </div>
       </div>
@@ -170,31 +230,24 @@ export function PaceChart({ logs, today }: Props) {
           aria-label="Reading pace over time"
         >
           <defs>
-            <linearGradient id="pace-fill" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.32} />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+            <linearGradient id="pace-bar" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.75} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.3} />
             </linearGradient>
-            <filter id="pace-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
           </defs>
 
           {/* Y-axis gridlines + labels */}
           {yTicks.map((v, i) => {
             const y = PAD.top + innerH - (v / niceMax) * innerH;
             return (
-              <g key={i} className="irm-pace__grid">
+              <g key={i}>
                 <line
                   x1={PAD.left}
                   x2={VB_W - PAD.right}
                   y1={y}
                   y2={y}
                   stroke="var(--ink-muted)"
-                  strokeOpacity={0.15}
+                  strokeOpacity={0.12}
                   strokeDasharray={i === 0 ? "0" : "2 4"}
                 />
                 <text
@@ -211,71 +264,95 @@ export function PaceChart({ logs, today }: Props) {
             );
           })}
 
-          {/* Area + line */}
-          <path
-            d={areaPath}
-            fill="url(#pace-fill)"
-            className="irm-pace__area"
-          />
-          <path
-            d={linePath}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth={1.75}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="irm-pace__line"
-          />
+          {/* Average reference line */}
+          <g>
+            <line
+              x1={PAD.left}
+              x2={VB_W - PAD.right}
+              y1={avgY}
+              y2={avgY}
+              stroke="var(--ink-muted)"
+              strokeOpacity={0.5}
+              strokeDasharray="3 3"
+              strokeWidth={0.8}
+            />
+            <text
+              x={VB_W - PAD.right - 2}
+              y={avgY - 3}
+              textAnchor="end"
+              fontSize={8}
+              fill="var(--ink-muted)"
+              fontFamily="var(--font-mono)"
+              style={{ letterSpacing: "0.06em", textTransform: "uppercase" }}
+            >
+              avg {Math.round(avg)}
+            </text>
+          </g>
 
-          {/* Today marker */}
-          {todayPoint && (
-            <g>
-              <line
-                x1={todayPoint.x}
-                x2={todayPoint.x}
-                y1={PAD.top}
-                y2={PAD.top + innerH}
-                stroke="var(--ink)"
-                strokeOpacity={0.18}
-                strokeDasharray="2 3"
+          {/* Daily bars */}
+          {points.map((p, i) => {
+            const h = PAD.top + innerH - p.y;
+            const isPeak = p.date === peak.date;
+            const isHover = hoverIdx === i;
+            return (
+              <rect
+                key={i}
+                x={p.x - barW / 2}
+                y={p.y}
+                width={barW}
+                height={Math.max(0.5, h)}
+                rx={1.2}
+                fill={isPeak ? "var(--accent-strong)" : "url(#pace-bar)"}
+                opacity={isHover ? 1 : 0.9}
+                className="irm-pace__bar-rect"
               />
-              <text
-                x={todayPoint.x}
-                y={PAD.top - 6}
-                textAnchor="middle"
-                fontSize={8}
-                fill="var(--ink-muted)"
-                fontFamily="var(--font-mono)"
-                style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}
-              >
-                today
-              </text>
-            </g>
-          )}
+            );
+          })}
 
-          {/* Peak marker */}
-          {points.length > 2 && (
-            <circle
-              cx={peak ? points.find((p) => p.date === peak.date)!.x : 0}
-              cy={peak ? points.find((p) => p.date === peak.date)!.y : 0}
-              r={3}
-              fill="var(--accent)"
-              filter="url(#pace-glow)"
+          {/* Moving-average trend line */}
+          {points.length >= 3 && (
+            <path
+              d={maPath}
+              fill="none"
+              stroke="var(--accent)"
+              strokeOpacity={0.9}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="3 3"
+              className="irm-pace__ma"
             />
           )}
 
-          {/* X-axis sparse date labels (first / mid / last) */}
-          {[0, Math.floor(points.length / 2), points.length - 1]
-            .filter((v, i, a) => a.indexOf(v) === i)
-            .map((idx) => (
+          {/* Today marker */}
+          {todayPoint && (
+            <line
+              x1={todayPoint.x}
+              x2={todayPoint.x}
+              y1={PAD.top}
+              y2={PAD.top + innerH}
+              stroke="var(--ink)"
+              strokeOpacity={0.18}
+              strokeDasharray="1 3"
+            />
+          )}
+
+          {/* X-axis labels: ~4 evenly spaced */}
+          {(() => {
+            const n = points.length;
+            const tickCount = Math.min(4, n);
+            const indices = Array.from({ length: tickCount }, (_, k) =>
+              Math.round((k * (n - 1)) / Math.max(1, tickCount - 1)),
+            ).filter((v, i, a) => a.indexOf(v) === i);
+            return indices.map((idx) => (
               <text
                 key={idx}
                 x={points[idx].x}
-                y={VB_H - 8}
+                y={VB_H - 6}
                 textAnchor={
                   idx === 0
                     ? "start"
-                    : idx === points.length - 1
+                    : idx === n - 1
                       ? "end"
                       : "middle"
                 }
@@ -285,9 +362,10 @@ export function PaceChart({ logs, today }: Props) {
               >
                 {formatAxisDate(points[idx].date)}
               </text>
-            ))}
+            ));
+          })()}
 
-          {/* Hover crosshair + active dot */}
+          {/* Hover crosshair */}
           {hover && (
             <g pointerEvents="none">
               <line
@@ -302,22 +380,15 @@ export function PaceChart({ logs, today }: Props) {
               <circle
                 cx={hover.x}
                 cy={hover.y}
-                r={6}
+                r={3.5}
                 fill="var(--accent)"
-                fillOpacity={0.18}
-              />
-              <circle
-                cx={hover.x}
-                cy={hover.y}
-                r={3}
-                fill="var(--accent)"
-                stroke="var(--bg-elev, var(--surface, #fff))"
+                stroke="var(--bg-elev, #fff)"
                 strokeWidth={1.5}
               />
             </g>
           )}
 
-          {/* Capture rect for mouse tracking */}
+          {/* Capture rect */}
           <rect
             x={PAD.left}
             y={PAD.top}
@@ -351,7 +422,26 @@ export function PaceChart({ logs, today }: Props) {
                 page{hover.pages === 1 ? "" : "s"}
               </span>
             </div>
-            {hover.pages >= peak.pages && (
+            <div className="irm-pace__tooltip-meta">
+              <span
+                className={`irm-pace__delta irm-pace__delta--${
+                  hover.pages >= avg ? "up" : "down"
+                }`}
+              >
+                {hover.pages >= avg ? "+" : ""}
+                {Math.round(hover.pages - avg)}
+              </span>
+              <span className="irm-pace__tooltip-meta-label">vs avg</span>
+            </div>
+            <div className="irm-pace__tooltip-meta">
+              <span className="irm-pace__delta irm-mono">
+                {Math.round(hover.ma)}
+              </span>
+              <span className="irm-pace__tooltip-meta-label">
+                {window}d trend
+              </span>
+            </div>
+            {hover.date === peak.date && (
               <div className="irm-pace__tooltip-tag">★ peak day</div>
             )}
           </div>
