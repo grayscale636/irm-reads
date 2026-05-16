@@ -155,18 +155,7 @@ export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
             </>
           )}
 
-          {(status === "want-to-read" || status === "reading") && (
-            <label className="irm-field">
-              <span className="irm-field__label">Notes</span>
-              <textarea
-                className="irm-input irm-textarea"
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={status === "want-to-read" ? "Why do you want to read this?" : "Your thoughts so far..."}
-              />
-            </label>
-          )}
+
         </div>
         <div className="irm-dialog__foot">
           <button className="irm-btn irm-btn--ghost" onClick={onClose}>

@@ -7,6 +7,8 @@ import authRouter from './routes/auth';
 import booksRouter from './routes/books';
 import readingLogsRouter from './routes/readingLogs';
 import notesRouter from './routes/notes';
+import { execSync } from 'child_process';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -78,6 +80,31 @@ app.use(express.json({ limit: '50mb' })); // For base64 images
 // Health check (no rate limit)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Deploy webhook (GitHub push → auto-deploy)
+app.post('/api/deploy', (req, res) => {
+  res.json({ ok: true, message: 'Webhook received. Deploy started.' });
+
+  // Defer async so webhook responds fast
+  setTimeout(() => {
+    const start = Date.now();
+    const REPO = '/home/gery/Documents/projects/productivity/irm-reads';
+    const WEBHOOK = 'https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD';
+
+    try {
+      execSync('git pull origin master', { cwd: REPO, timeout: 30000 });
+      execSync('npx vite build', { cwd: `${REPO}/read-dash`, timeout: 60000 });
+      execSync('cp -r dist/* ../public/', { cwd: `${REPO}/read-dash`, timeout: 10000 });
+      execSync('pm2 restart irmreads-frontend', { timeout: 10000 });
+
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"IRM-Deploy","embeds":[{"title":"✅ Deploy Successful","description":"Deployed in ${elapsed}s","color":2276157}]}'`, { timeout: 5000 });
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"IRM-Deploy","embeds":[{"title":"❌ Deploy Failed","description":"Error: ${errMsg.slice(0, 400)}","color":15728644}]}'`, { timeout: 5000 });
+    }
+  }, 100);
 });
 
 // Public routes (with auth rate limiter)

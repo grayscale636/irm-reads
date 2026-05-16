@@ -6,11 +6,10 @@ interface Props {
   height?: number;
 }
 
-export function PaceChart({ logs, height = 140 }: Props) {
-  const points = useMemo(() => {
-    if (logs.length === 0) return null;
+export function PaceChart({ logs, height = 60 }: Props) {
+  const chart = useMemo(() => {
+    if (logs.length < 2) return null;
 
-    // Sort chronologically and aggregate by date
     const sorted = [...logs].sort((a, b) => a.date.localeCompare(b.date));
     const byDate: { date: string; pages: number }[] = [];
     let lastDate = "";
@@ -28,77 +27,52 @@ export function PaceChart({ logs, height = 140 }: Props) {
     if (byDate.length < 2) return null;
 
     const maxPages = Math.max(...byDate.map((d) => d.pages));
-
-    // Build SVG polyline points
-    const w = byDate.length * 20;
-    const h = height - 24;
-    const pad = 12;
-    const chartW = w;
-    const chartH = h - pad * 2;
+    const pad = { t: 6, r: 6, b: 6, l: 6 };
+    const chartW = Math.max(byDate.length * 16, 80);
+    const chartH = height - pad.t - pad.b;
 
     const pts = byDate.map((d, i) => {
-      const x = pad + (i / (byDate.length - 1)) * (chartW - pad * 2);
-      const y = pad + chartH - (d.pages / maxPages) * chartH;
-      return `${x},${y}`;
+      const x = pad.l + (i / (byDate.length - 1)) * (chartW - pad.l - pad.r);
+      const y = pad.t + chartH - (d.pages / maxPages) * chartH;
+      return { x, y, date: d.date, pages: d.pages };
     });
 
-    // Fill area: start from bottom, add poly points, back to bottom
-    const firstX = pad;
-    const lastX = chartW - pad;
-    const bottomY = pad + chartH;
-    const fillPts = `${firstX},${bottomY} ${pts.join(" ")} ${lastX},${bottomY}`;
+    const bottomY = pad.t + chartH;
+    const fillPts = `${pad.l},${bottomY} ${pts.map(p => `${p.x},${p.y}`).join(" ")} ${chartW - pad.r},${bottomY}`;
 
-    return { pts: pts.join(" "), fill: fillPts, byDate, maxPages };
+    return { pts, fill: fillPts, maxPages };
   }, [logs, height]);
 
-  if (!points) return null;
+  if (!chart) return null;
 
-  const w = points.byDate.length * 20;
+  const w = Math.max(chart.pts.length * 16, 80);
   const h = height;
-  // Downsample labels if too many
-  const labelEvery = points.byDate.length > 10
-    ? Math.ceil(points.byDate.length / 8)
-    : 1;
 
   return (
     <div className="irm-pace">
       <svg viewBox={`0 0 ${w} ${h}`} className="irm-pace__svg" preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="pace-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.04} />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.18} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        {/* Fill area under the line */}
-        <polygon points={points.fill} fill="url(#pace-fill)" />
-        {/* Line */}
+        <polygon points={chart.fill} fill="url(#pace-fill)" />
         <polyline
-          points={points.pts}
+          points={chart.pts.map(p => `${p.x},${p.y}`).join(" ")}
           fill="none"
           stroke="var(--accent)"
-          strokeWidth={2}
+          strokeWidth={1.5}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* Dots */}
-        {points.byDate.map((d, i) => {
-          const x = 12 + (i / (points.byDate.length - 1)) * (w - 24);
-          const y = 12 + (height - 24) - (d.pages / points.maxPages) * (height - 24) - 12;
-          return (
-            <circle key={i} cx={x} cy={y + 12} r={3} fill="var(--accent)" opacity={0.8} />
-          );
-        })}
-        {/* X-axis labels */}
-        {points.byDate.map((d, i) => {
-          if (i % labelEvery !== 0 && i !== points.byDate.length - 1) return null;
-          const x = 12 + (i / (points.byDate.length - 1)) * (w - 24);
-          return (
-            <text key={i} x={x} y={h - 2} textAnchor="middle" fill="var(--text-muted)"
-              fontSize={9} fontFamily="var(--font-mono)">
-              {d.date.slice(5)}
-            </text>
-          );
-        })}
+        {/* Hover zones — positioned on the line */}
+        {chart.pts.map((p, i) => (
+          <g key={i}>
+            <title>{p.date} · {p.pages} page{p.pages > 1 ? "s" : ""}</title>
+            <circle cx={p.x} cy={p.y} r={5} fill="transparent" className="irm-pace__dot" />
+          </g>
+        ))}
       </svg>
     </div>
   );

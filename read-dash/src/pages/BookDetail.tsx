@@ -7,44 +7,35 @@ import { BookCover } from "@/components/design/BookCover";
 import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
+import { useCollapsible } from "@/hooks/use-collapsible";
 import { getBookNotes, addBookNote, deleteBookNote, type BookNote } from "@/lib/api";
 
-function Collapsible({ open: initOpen, title, subtitle, count, children, onAdd }: {
-  open?: boolean;
+function SectionHead({ title, subtitle, expanded, onToggle, action }: {
   title: string;
-  subtitle: string;
-  count?: number;
-  children: React.ReactNode;
-  onAdd?: () => void;
+  subtitle: React.ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  action?: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(initOpen ?? true);
   return (
-    <section className="irm-card">
-      <button className="irm-section-head irm-section-head--clickable" onClick={() => setOpen(!open)}>
-        <div className="irm-section-head__left">
-          <h2 className="irm-section-title">{title}</h2>
-          <p className="irm-section-sub">
-            {count !== undefined && <span className="irm-mono">{count}</span>} {subtitle}
-          </p>
-        </div>
-        <div className="irm-section-head__right">
-          {onAdd && (
-            <span className="irm-btn irm-btn--ghost" onClick={(e) => { e.stopPropagation(); onAdd(); }}>
-              <Icon.Plus size={13} /> Add
-            </span>
-          )}
-          <span className="irm-chevron" data-open={open}>
-            <Icon.ChevronRight size={14} />
-          </span>
-        </div>
-      </button>
-      <div className="irm-collapse" data-open={open}>
-        <div className="irm-collapse__inner">
-          {children}
-        </div>
+    <div className="irm-section-head">
+      <div>
+        <h2 className="irm-section-title">{title}</h2>
+        <p className="irm-section-sub">{subtitle}</p>
       </div>
-    </section>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {action}
+        <button type="button" className="irm-section-toggle" aria-expanded={expanded} onClick={onToggle}>
+          {expanded ? "Collapse" : "Expand"}
+          <span className="irm-section-toggle__chev"><Icon.ChevronDown size={14} /></span>
+        </button>
+      </div>
+    </div>
   );
+}
+
+function SectionCard({ children }: { children: React.ReactNode }) {
+  return <section className="irm-card">{children}</section>;
 }
 
 export default function BookDetail() {
@@ -70,6 +61,11 @@ export default function BookDetail() {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
+
+  const notesColl = useCollapsible("book-notes", true);
+  const quotesColl = useCollapsible("book-quotes", false);
+  const historyColl = useCollapsible("book-history", false);
+  const paceColl = useCollapsible("book-pace", true);
 
   const loadNotes = useCallback(async () => {
     if (!book?.id) return;
@@ -303,96 +299,109 @@ export default function BookDetail() {
               </div>
             )}
 
-            {/* Reading pace chart */}
-            {bookLogs.length >= 2 && (
-              <PaceChart logs={bookLogs} />
-            )}
           </section>
 
-          {/* ── Notes (always open, collapsible) ── */}
-          <Collapsible
-            open
-            title="Notes"
-            subtitle="entries"
-            count={notes.length}
-            onAdd={() => setShowNoteForm(true)}
-          >
-            {showNoteForm && (
-              <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
-                <textarea
-                  className="irm-input irm-textarea"
-                  rows={4}
-                  value={noteInput}
-                  onChange={(e) => setNoteInput(e.target.value)}
-                  placeholder={
-                    book.status === "want-to-read"
-                      ? "Why do you want to read this?"
-                      : book.status === "paused"
-                      ? "Why did you pause?"
-                      : book.status === "dnf"
-                      ? "Why did you not finish?"
-                      : "Your thoughts..."
-                  }
-                  autoFocus
-                />
-                <div className="irm-reflect__actions">
-                  <button
-                    className="irm-btn irm-btn--ghost"
-                    onClick={() => {
-                      setNoteInput("");
-                      setShowNoteForm(false);
-                    }}
-                  >
-                    Cancel
+          {/* ── Notes ── */}
+          <SectionCard>
+            <SectionHead
+              title="Notes"
+              subtitle={<><span className="irm-mono">{notes.length}</span> entries</>}
+              expanded={notesColl.open}
+              onToggle={notesColl.toggle}
+              action={
+                notesColl.open && !showNoteForm && (
+                  <button className="irm-btn irm-btn--ghost" onClick={() => setShowNoteForm(true)}>
+                    <Icon.Plus size={13} /> Add note
                   </button>
-                  <button
-                    className="irm-btn irm-btn--primary"
-                    disabled={!noteInput.trim()}
-                    onClick={addNote}
-                  >
-                    <Icon.Check size={13} /> Save
-                  </button>
-                </div>
-              </div>
-            )}
-            {notesLoading ? (
-              <div className="irm-loading" style={{ padding: 20 }}><div className="irm-spinner" /></div>
-            ) : notes.length === 0 ? (
-              <div className="irm-empty" style={{ padding: "24px 0" }}>
-                <div className="irm-empty__text">No notes yet.</div>
-              </div>
-            ) : (
-              <div className="irm-notes">
-                {notes.map((n) => (
-                  <div key={n.id} className="irm-note">
-                    <div className="irm-note__head">
-                      <div className="irm-note__meta">
-                        <Icon.ChevronRight size={12} />
-                        <span className="irm-note__date">
-                          {new Date(n.createdAt).toLocaleDateString("en-ID", {
-                            month: "short", day: "numeric"
-                          })}
-                        </span>
-                      </div>
-                      <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
-                        <Icon.Trash size={13} />
-                      </button>
-                    </div>
-                    <p className="irm-note__text">{n.text}</p>
+                )
+              }
+            />
+            {notesColl.open && <>
+              {showNoteForm && (
+                <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
+                  <textarea
+                    className="irm-input irm-textarea"
+                    rows={4}
+                    value={noteInput}
+                    onChange={(e) => setNoteInput(e.target.value)}
+                    placeholder={
+                      book.status === "want-to-read"
+                        ? "Why do you want to read this?"
+                        : book.status === "paused"
+                        ? "Why did you pause?"
+                        : book.status === "dnf"
+                        ? "Why did you not finish?"
+                        : "Your thoughts..."
+                    }
+                    autoFocus
+                  />
+                  <div className="irm-reflect__actions">
+                    <button
+                      className="irm-btn irm-btn--ghost"
+                      onClick={() => {
+                        setNoteInput("");
+                        setShowNoteForm(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="irm-btn irm-btn--primary"
+                      disabled={!noteInput.trim()}
+                      onClick={addNote}
+                    >
+                      <Icon.Check size={13} /> Save
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </Collapsible>
+                </div>
+              )}
+              {notesLoading ? (
+                <div className="irm-loading" style={{ padding: 20 }}><div className="irm-spinner" /></div>
+              ) : notes.length === 0 ? (
+                <div className="irm-empty" style={{ padding: "24px 0" }}>
+                  <div className="irm-empty__text">No notes yet.</div>
+                </div>
+              ) : (
+                <div className="irm-notes">
+                  {notes.map((n) => (
+                    <div key={n.id} className="irm-note">
+                      <div className="irm-note__head">
+                        <div className="irm-note__meta">
+                          <Icon.ChevronRight size={12} />
+                          <span className="irm-note__date">
+                            {new Date(n.createdAt).toLocaleDateString("en-ID", {
+                              month: "short", day: "numeric"
+                            })}
+                          </span>
+                        </div>
+                        <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
+                          <Icon.Trash size={13} />
+                        </button>
+                      </div>
+                      <p className="irm-note__text">{n.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>}
+          </SectionCard>
 
           {/* ── Quotes ── */}
-          <Collapsible
-            title="Quotes"
-            subtitle="saved"
-            count={quotes.length}
-            onAdd={() => setShowQuoteForm(true)}
-          >
-            {showQuoteForm && (
+          <SectionCard>
+            <SectionHead
+              title="Quotes"
+              subtitle={<><span className="irm-mono">{quotes.length}</span> saved</>}
+              expanded={quotesColl.open}
+              onToggle={quotesColl.toggle}
+              action={
+                !showQuoteForm && quotesColl.open && (
+                  <button className="irm-btn irm-btn--ghost" onClick={() => setShowQuoteForm(true)}>
+                    <Icon.Plus size={13} /> Add
+                  </button>
+                )
+              }
+            />
+            {quotesColl.open && showQuoteForm && (
               <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
                 <textarea
                   className="irm-input irm-textarea"
@@ -422,7 +431,7 @@ export default function BookDetail() {
                 </div>
               </div>
             )}
-            {quotes.length === 0 ? (
+            {quotesColl.open && (quotes.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
                 <div className="irm-empty__text">No quotes yet.</div>
               </div>
@@ -440,16 +449,18 @@ export default function BookDetail() {
                   </li>
                 ))}
               </ul>
-            )}
-          </Collapsible>
+            ))}
+          </SectionCard>
 
           {/* ── Reading history ── */}
-          <Collapsible
-            title="Reading history"
-            subtitle="sessions"
-            count={bookLogs.length}
-          >
-            {bookLogs.length === 0 ? (
+          <SectionCard>
+            <SectionHead
+              title="Reading history"
+              subtitle={<><span className="irm-mono">{bookLogs.length}</span> sessions</>}
+              expanded={historyColl.open}
+              onToggle={historyColl.toggle}
+            />
+            {historyColl.open && (bookLogs.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
                 <div className="irm-empty__text">No reading logged yet.</div>
               </div>
@@ -459,7 +470,7 @@ export default function BookDetail() {
                   <li key={log.id} className="irm-history__item">
                     <div className="irm-history__date irm-mono">{log.date.slice(5)}</div>
                     <div className="irm-history__range irm-mono">
-                      {log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : "session"}
+                      {log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : `p.${log.pagesRead}`}
                     </div>
                     <div className="irm-history__pages">
                       <span className="irm-mono">{log.pagesRead}</span>
@@ -476,8 +487,21 @@ export default function BookDetail() {
                   </li>
                 )}
               </ul>
-            )}
-          </Collapsible>
+            ))}
+          </SectionCard>
+
+          {/* ── Reading pace chart ── */}
+          {bookLogs.length >= 2 && (
+          <SectionCard>
+            <SectionHead
+              title="Reading pace"
+              subtitle={<><span className="irm-mono">{bookLogs.length}</span> sessions</>}
+              expanded={paceColl.open}
+              onToggle={paceColl.toggle}
+            />
+            {paceColl.open && <PaceChart logs={bookLogs} height={60} />}
+          </SectionCard>
+          )}
         </div>
       </div>
     </div>
