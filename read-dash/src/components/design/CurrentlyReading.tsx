@@ -18,7 +18,7 @@ const STALL_LABEL: Record<string, string> = {
   cooling: "Cooling",
   stalled: "Stalled",
   frozen: "Frozen",
-};
+}; 
 
 export function CurrentlyReading({ books, logs, today, onLogReading, onOpenBook, onChangeStatus }: Props) {
   const reading = books.filter((b) => b.status === "reading");
