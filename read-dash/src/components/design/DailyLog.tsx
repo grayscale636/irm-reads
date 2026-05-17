@@ -89,7 +89,7 @@ export function DailyLog({ logs, books, selectedDate, today, onClearDate, onLogR
                 <span className="irm-mono irm-logitem__pages-num">{log.pagesRead}</span>
                 <span className="irm-logitem__pages-label">pages</span>
               </div>
-              <button className="irm-logitem__delete" onClick={() => onDelete(log.id)} title="Delete">
+              <button className="irm-logitem__delete" style={{ opacity: 1 }} onClick={() => { if (confirm('Delete this reading session?')) onDelete(log.id); }} title="Delete">
                 <Icon.Trash size={14} />
               </button>
             </li>
