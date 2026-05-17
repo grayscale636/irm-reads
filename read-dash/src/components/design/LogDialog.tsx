@@ -20,7 +20,8 @@ interface Props {
 }
 
 export function LogDialog({ open, onClose, books, defaultBookId, defaultDate, onSubmit }: Props) {
-  const reading = books.filter((b) => b.status === "reading");
+  // Active books = currently reading or paused (paused books auto-resume on log).
+  const reading = books.filter((b) => b.status === "reading" || b.status === "paused");
   const [bookId, setBookId] = useState<string>("");
   const [date, setDate] = useState<string>(defaultDate);
   const [startPage, setStartPage] = useState<string>("");
@@ -64,10 +65,11 @@ export function LogDialog({ open, onClose, books, defaultBookId, defaultDate, on
           <label className="irm-field">
             <span className="irm-field__label">Book</span>
             <select value={bookId} onChange={(e) => setBookId(e.target.value)} className="irm-input">
-              {reading.length === 0 && <option value="">No books currently reading</option>}
+              {reading.length === 0 && <option value="">No books currently reading or paused</option>}
               {reading.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.title}
+                  {b.status === "paused" ? " (paused)" : ""}
                 </option>
               ))}
             </select>
