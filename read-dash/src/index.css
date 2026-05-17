@@ -1306,10 +1306,10 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Show ~4 authors, scroll for the rest. Keeps the card height aligned with
+  /* Show ~3 authors, scroll for the rest. Keeps the card height aligned with
    * its trio neighbours (PersonalRecords, ReadingRhythm) instead of growing
    * to fit 10 entries. */
-  max-height: 320px;
+  max-height: 240px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
