@@ -85,8 +85,12 @@ export function projectFinish(
     const pages = inWindow.reduce((sum, l) => sum + (l.pagesRead || 0), 0);
     if (pages <= 0) return null;
     const activeDays = new Set(inWindow.map((l) => l.date)).size;
-    const pagesPerDay = pages / windowDays;
-    const daysToFinish = Math.ceil(remaining / pagesPerDay);
+    // Displayed pace = average across days the reader actually read — matches
+    // what a user feels their "pace" is. Calendar ETA still uses the full window
+    // so projected finish date accounts for off-days, not just reading days.
+    const pagesPerDay = pages / Math.max(1, activeDays);
+    const calendarRate = pages / windowDays;
+    const daysToFinish = Math.ceil(remaining / Math.max(0.01, calendarRate));
     return {
       pagesPerDay,
       daysToFinish,
