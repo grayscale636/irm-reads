@@ -42,6 +42,30 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Update note
+router.put('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+    if (!text?.trim()) {
+      res.status(400).json({ error: 'text is required' });
+      return;
+    }
+    const result = await pool.query(
+      'UPDATE book_notes SET text = $1 WHERE id = $2 AND user_id = $3 RETURNING id, book_id as "bookId", text, created_at::text as "createdAt"',
+      [text.trim(), id, req.userId]
+    );
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'Note not found' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating note:', error);
+    res.status(500).json({ error: 'Failed to update note' });
+  }
+});
+
 // Delete note
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
