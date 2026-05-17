@@ -137,7 +137,13 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     }
     
     // Auto-complete when pagesRead reaches totalPages (100%)
-    if (updated.pagesRead >= updated.totalPages && updated.status !== "completed") {
+    // - Skip if user is explicitly changing the status (so paused/dnf stick)
+    // - Skip paused/dnf — completing those should be an explicit user action
+    if (
+      !updates.status &&
+      updated.pagesRead >= updated.totalPages &&
+      (updated.status === "reading" || updated.status === "want-to-read")
+    ) {
       updated.status = "completed";
       updated.progress = 100;
       if (!updated.finishedAt) {
@@ -181,22 +187,33 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   // Public addReadingLog function (uses internal createReadingLog)
   const addReadingLog = async (bookId: string, startPage: number, endPage: number, date?: string): Promise<void> => {
     await createReadingLog(bookId, startPage, endPage, date);
-    
+
     // Also update book's pagesRead if endPage is higher
     const book = books.find(b => b.id === bookId);
     if (book && endPage > book.pagesRead) {
-      const updated = { ...book, pagesRead: endPage };
+      const updated = { ...book, pagesRead: Math.min(endPage, book.totalPages) };
       updated.progress = Math.round((updated.pagesRead / updated.totalPages) * 100);
-      
-      // Auto-complete when pagesRead reaches totalPages (100%)
-      if (updated.pagesRead >= updated.totalPages && updated.status !== "completed") {
+
+      // First log on a paused/want-to-read book resumes/starts it.
+      if (updated.status === "paused" || updated.status === "want-to-read") {
+        updated.status = "reading";
+        if (!updated.startedAt) {
+          updated.startedAt = date || new Date().toISOString().split('T')[0];
+        }
+      }
+
+      // Auto-complete when pagesRead reaches totalPages — only for active books.
+      if (
+        updated.pagesRead >= updated.totalPages &&
+        updated.status === "reading"
+      ) {
         updated.status = "completed";
         updated.progress = 100;
         if (!updated.finishedAt) {
           updated.finishedAt = new Date().toISOString().split('T')[0];
         }
       }
-      
+
       await apiUpdateBook(bookId, updated);
       setBooks((prev) =>
         prev.map((b) => (b.id === bookId ? updated : b))
