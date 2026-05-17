@@ -11,8 +11,14 @@ export const pool = new Pool({
   password: process.env.DB_PASSWORD,
 });
 
+// Log only the first successful connection; subsequent ones (from pool churn)
+// would otherwise spam the logs every time the pool spins up a fresh socket.
+let connectedOnce = false;
 pool.on('connect', () => {
-  console.log('✅ Connected to PostgreSQL');
+  if (!connectedOnce) {
+    connectedOnce = true;
+    console.log('✅ Connected to PostgreSQL');
+  }
 });
 
 pool.on('error', (err) => {
