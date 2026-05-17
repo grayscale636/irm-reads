@@ -83,26 +83,56 @@ app.get('/health', (req, res) => {
 });
 
 // Deploy webhook (GitHub push → auto-deploy)
+// Expects JSON body with repository.full_name
 app.post('/api/deploy', (req, res) => {
-  res.json({ ok: true, message: 'Webhook received. Deploy started.' });
+  res.json({ ok: true, message: 'Webhook received.' });
 
-  // Defer async so webhook responds fast
+  const repo = req.body?.repository?.full_name;
+  const event = req.headers['x-github-event'];
+
+  if (event !== 'push' || !repo) return;
+
+  const PROJECTS: Record<string, {
+    name: string;
+    dir: string;
+    deploy: () => void;
+  }> = {
+    'grayscale636/irm-reads': {
+      name: 'IRM Reads',
+      dir: '/home/gery/Documents/projects/productivity/irm-reads',
+      deploy: () => {
+        execSync('git pull origin master', { cwd: `/home/gery/Documents/projects/productivity/irm-reads`, timeout: 30000 });
+        execSync('npx vite build', { cwd: `/home/gery/Documents/projects/productivity/irm-reads/read-dash`, timeout: 60000 });
+        execSync('cp -r dist/* ../public/', { cwd: `/home/gery/Documents/projects/productivity/irm-reads/read-dash`, timeout: 10000 });
+        execSync('pm2 restart irmreads-frontend', { timeout: 10000 });
+      },
+    },
+    'grayscale636/kei-personal-assistant': {
+      name: 'Kei Bot DC',
+      dir: '/home/gery/Documents/projects/AI/bot_dc',
+      deploy: () => {
+        execSync('git fetch origin master', { cwd: `/home/gery/Documents/projects/AI/bot_dc`, timeout: 30000 });
+        execSync('git reset --hard origin/master', { cwd: `/home/gery/Documents/projects/AI/bot_dc`, timeout: 30000 });
+        execSync('docker compose up -d --build', { cwd: `/home/gery/Documents/projects/AI/bot_dc`, timeout: 120000 });
+        execSync('docker image prune -f', { timeout: 10000 });
+      },
+    },
+  };
+
+  const project = PROJECTS[repo];
+  if (!project) return;
+
+  const WEBHOOK = 'https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD';
+  const start = Date.now();
+
   setTimeout(() => {
-    const start = Date.now();
-    const REPO = '/home/gery/Documents/projects/productivity/irm-reads';
-    const WEBHOOK = 'https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD';
-
     try {
-      execSync('git pull origin master', { cwd: REPO, timeout: 30000 });
-      execSync('npx vite build', { cwd: `${REPO}/read-dash`, timeout: 60000 });
-      execSync('cp -r dist/* ../public/', { cwd: `${REPO}/read-dash`, timeout: 10000 });
-      execSync('pm2 restart irmreads-frontend', { timeout: 10000 });
-
+      project.deploy();
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"IRM-Deploy","embeds":[{"title":"✅ Deploy Successful","description":"Deployed in ${elapsed}s","color":2276157}]}'`, { timeout: 5000 });
+      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"${project.name}-Deploy","embeds":[{"title":"✅ ${project.name} Deploy Successful","description":"Deployed in ${elapsed}s","color":2276157}]}'`, { timeout: 5000 });
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"IRM-Deploy","embeds":[{"title":"❌ Deploy Failed","description":"Error: ${errMsg.slice(0, 400)}","color":15728644}]}'`, { timeout: 5000 });
+      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"${project.name}-Deploy","embeds":[{"title":"❌ ${project.name} Deploy Failed","description":"Error: ${errMsg.slice(0, 400)}","color":15728644}]}'`, { timeout: 5000 });
     }
   }, 100);
 });
