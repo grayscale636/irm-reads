@@ -5,8 +5,6 @@ import { AppShell } from "@/components/design/AppShell";
 import { AddBookDialog } from "@/components/design/AddBookDialog";
 
 export interface OutletCtx {
-  searchQuery: string;
-  setSearchQuery: (q: string) => void;
   openAddBookDialog: () => void;
   today: string;
 }
@@ -14,23 +12,16 @@ export interface OutletCtx {
 function LayoutInner() {
   const navigate = useNavigate();
   const { addBook } = useBooks();
-  const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
 
   const ctx: OutletCtx = {
-    searchQuery,
-    setSearchQuery,
     openAddBookDialog: () => setAddOpen(true),
     today,
   };
 
   return (
-    <AppShell
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-      onAddBook={() => setAddOpen(true)}
-    >
+    <AppShell onAddBook={() => setAddOpen(true)}>
       <Outlet context={ctx} />
       <AddBookDialog
         open={addOpen}

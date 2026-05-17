@@ -28,10 +28,11 @@ const SORTS: Array<{ id: SortKey; label: string }> = [
 
 export default function Library() {
   const navigate = useNavigate();
-  const { searchQuery, openAddBookDialog } = useOutletContext<OutletCtx>();
+  const { openAddBookDialog } = useOutletContext<OutletCtx>();
   const { books, readingLogs, isLoading } = useBooks();
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("recent");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const counts = useMemo(
     () => ({
@@ -111,9 +112,30 @@ export default function Library() {
             <span className="irm-mono">{counts.reading}</span> in progress
           </p>
         </div>
-        <button className="irm-btn irm-btn--primary" onClick={openAddBookDialog}>
-          <Icon.Plus size={14} /> Add book
-        </button>
+        <div className="irm-library__head-actions">
+          <label className="irm-search">
+            <Icon.Search size={14} />
+            <input
+              className="irm-search__input"
+              placeholder="Search books, authors…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="irm-journal__searchclear"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                <Icon.X size={12} />
+              </button>
+            )}
+          </label>
+          <button className="irm-btn irm-btn--primary" onClick={openAddBookDialog}>
+            <Icon.Plus size={14} /> Add book
+          </button>
+        </div>
       </div>
 
       <div className="irm-tabs">

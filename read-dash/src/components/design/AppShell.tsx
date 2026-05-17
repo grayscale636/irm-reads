@@ -1,32 +1,18 @@
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Icon } from "./Icons";
 import { UserMenu } from "./UserMenu";
 
 interface Props {
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
   onAddBook: () => void;
   children: ReactNode;
 }
 
-export function AppShell({ searchQuery, onSearchChange, onAddBook, children }: Props) {
+export function AppShell({ onAddBook, children }: Props) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        const el = document.querySelector<HTMLInputElement>(".irm-search__input");
-        el?.focus();
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, []);
 
   const route = location.pathname.startsWith("/dashboard")
     ? "dashboard"
@@ -65,19 +51,6 @@ export function AppShell({ searchQuery, onSearchChange, onAddBook, children }: P
             </button>
           </nav>
           <div className="irm-header__right">
-            <div className="irm-search">
-              <Icon.Search size={14} />
-              <input
-                className="irm-search__input"
-                placeholder="Search books, authors…"
-                value={searchQuery}
-                onChange={(e) => {
-                  onSearchChange(e.target.value);
-                  if (e.target.value && route !== "library") navigate("/");
-                }}
-              />
-              <kbd className="irm-search__kbd">⌘K</kbd>
-            </div>
             <button className="irm-iconbtn irm-iconbtn--ghost" title="Add book" onClick={onAddBook}>
               <Icon.Plus size={16} />
             </button>

@@ -1161,6 +1161,15 @@ button { font-family: inherit; }
 }
 .irm-sort__select:hover { border-color: var(--border-strong); }
 
+/* Search + add-book cluster on the right side of the Library page head. */
+.irm-library__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.irm-library__head-actions .irm-search { width: 260px; }
+
 /* ── Library grid ──────────────────────────── */
 .irm-library__grid {
   display: grid;
@@ -2467,6 +2476,8 @@ button { font-family: inherit; }
   .irm-detail__pages-inputs { flex-wrap: wrap; }
   .irm-journal__toolbar { flex-direction: column; align-items: stretch; }
   .irm-journal__search { width: 100%; }
+  .irm-library__head-actions { width: 100%; flex-wrap: wrap; }
+  .irm-library__head-actions .irm-search { width: 100%; }
   .irm-heatmap__main { flex-direction: column; gap: 8px; }
   .irm-heatmap__yearlist {
     flex-direction: row;
