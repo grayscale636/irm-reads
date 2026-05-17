@@ -6,6 +6,8 @@ import { Icon } from "@/components/design/Icons";
 
 type Filter = "all" | "notes" | "quotes";
 
+const PAGE_SIZE = 50;
+
 interface Entry {
   key: string;
   type: "note" | "quote";
@@ -30,6 +32,13 @@ export default function Journal() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Reset the slice whenever filter/query changes so the user doesn't end up
+  // viewing a stale window of an old filtered list.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filter, query]);
 
   useEffect(() => {
     let mounted = true;
@@ -191,7 +200,7 @@ export default function Journal() {
         </div>
       ) : (
         <ul className="irm-journal">
-          {filtered.map((e) => (
+          {filtered.slice(0, visibleCount).map((e) => (
             <li key={e.key} className={`irm-journal__item irm-journal__item--${e.type}`}>
               <div className="irm-journal__head">
                 <span className={`irm-pill irm-pill--${e.type}`}>{e.type === "note" ? "Note" : "Quote"}</span>
@@ -221,6 +230,24 @@ export default function Journal() {
             </li>
           ))}
         </ul>
+      )}
+
+      {filtered.length > visibleCount && (
+        <div className="irm-journal__more">
+          <span className="irm-journal__more-count">
+            Showing <span className="irm-mono">{visibleCount}</span> of{" "}
+            <span className="irm-mono">{filtered.length}</span>
+          </span>
+          <button
+            type="button"
+            className="irm-btn irm-btn--ghost"
+            onClick={() =>
+              setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length))
+            }
+          >
+            <Icon.Plus size={13} /> Show {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+          </button>
+        </div>
       )}
     </div>
   );
