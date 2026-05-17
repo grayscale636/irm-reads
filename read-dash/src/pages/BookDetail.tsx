@@ -8,7 +8,7 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, deleteBookNote, type BookNote } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, type BookNote } from "@/lib/api";
 
 function SectionHead({ title, subtitle, expanded, onToggle, action }: {
   title: string;
@@ -59,6 +59,8 @@ export default function BookDetail() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteInput, setNoteInput] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteText, setEditNoteText] = useState("");
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
 
@@ -164,6 +166,28 @@ export default function BookDetail() {
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
     } catch (e) {
       console.error("Failed to delete note:", e);
+    }
+  };
+
+  const startEditNote = (note: BookNote) => {
+    setEditingNoteId(note.id);
+    setEditNoteText(note.text);
+  };
+
+  const cancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditNoteText("");
+  };
+
+  const saveEditNote = async () => {
+    if (!editingNoteId || !editNoteText.trim()) return;
+    try {
+      await updateBookNote(editingNoteId, editNoteText.trim());
+      setNotes((prev) => prev.map((n) => n.id === editingNoteId ? { ...n, text: editNoteText.trim() } : n));
+      setEditingNoteId(null);
+      setEditNoteText("");
+    } catch (e) {
+      console.error("Failed to update note:", e);
     }
   };
 
@@ -275,29 +299,50 @@ export default function BookDetail() {
                 </div>
               </div>
             </div>
-            {book.status !== "completed" && (
-              <div className="irm-detail__pages-row">
-                <label className="irm-field">
-                  <span className="irm-field__label">Update pages read</span>
-                  <div className="irm-detail__pages-inputs">
-                    <input
-                      type="number"
-                      className="irm-input irm-mono"
-                      value={pagesInput}
-                      min={0}
-                      max={book.totalPages}
-                      onChange={(e) => setPagesInput(e.target.value)}
-                      onBlur={savePages}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                    />
-                    <span className="irm-detail__pages-of irm-mono">/ {book.totalPages}</span>
+            <div className="irm-detail__pages-row">
+              <label className="irm-field">
+                <span className="irm-field__label">
+                  {book.status === "completed" ? "Pages" : "Update pages read"}
+                </span>
+                <div className="irm-detail__pages-inputs">
+                  <input
+                    type="number"
+                    className="irm-input irm-mono"
+                    value={pagesInput}
+                    min={0}
+                    max={book.totalPages}
+                    data-pages-input="true"
+                    disabled={book.status === "completed"}
+                    onChange={(e) => setPagesInput(e.target.value)}
+                    onBlur={savePages}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  />
+                  <span className="irm-detail__pages-of irm-mono">/ </span>
+                  <input
+                    type="number"
+                    className="irm-input irm-mono"
+                    style={{ width: 80 }}
+                    defaultValue={book.totalPages}
+                    min={1}
+                    onBlur={(e) => {
+                      const n = parseInt(e.target.value, 10) || 0;
+                      if (n > 0 && n !== book.totalPages) {
+                        updateBook(book.id, { totalPages: n });
+                      } else {
+                        e.target.value = String(book.totalPages);
+                      }
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                    title="Total pages"
+                  />
+                  {book.status !== "completed" && (
                     <button className="irm-btn irm-btn--ghost" onClick={markComplete}>
                       <Icon.Check size={13} /> Mark complete
                     </button>
-                  </div>
-                </label>
-              </div>
-            )}
+                  )}
+                </div>
+              </label>
+            </div>
 
           </section>
 
@@ -374,11 +419,34 @@ export default function BookDetail() {
                             })}
                           </span>
                         </div>
-                        <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
-                          <Icon.Trash size={13} />
-                        </button>
+                        <div className="irm-note__actions">
+                          <button className="irm-logitem__delete" onClick={() => startEditNote(n)}>
+                            <Icon.Edit size={13} />
+                          </button>
+                          <button className="irm-logitem__delete" onClick={() => removeNote(n.id)}>
+                            <Icon.Trash size={13} />
+                          </button>
+                        </div>
                       </div>
-                      <p className="irm-note__text">{n.text}</p>
+                      {editingNoteId === n.id ? (
+                        <div className="irm-reflect__edit" style={{ marginTop: 6 }}>
+                          <textarea
+                            className="irm-input irm-textarea"
+                            rows={4}
+                            value={editNoteText}
+                            onChange={(e) => setEditNoteText(e.target.value)}
+                            autoFocus
+                          />
+                          <div className="irm-reflect__actions">
+                            <button className="irm-btn irm-btn--ghost" onClick={cancelEditNote}>Cancel</button>
+                            <button className="irm-btn irm-btn--primary" disabled={!editNoteText.trim()} onClick={saveEditNote}>
+                              <Icon.Check size={13} /> Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="irm-note__text">{n.text}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -463,6 +531,26 @@ export default function BookDetail() {
             {historyColl.open && (bookLogs.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
                 <div className="irm-empty__text">No reading logged yet.</div>
+                <button
+                  className="irm-btn irm-btn--ghost"
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    const n = parseInt(pagesInput, 10);
+                    if (n > 0 && n <= book.totalPages && n > book.pagesRead) {
+                      addReadingLog(book.id, book.pagesRead, n, today);
+                      return;
+                    }
+                    // Otherwise prompt user to fill the page count input above.
+                    const input = document.querySelector<HTMLInputElement>('input[data-pages-input="true"]');
+                    if (input) {
+                      input.focus();
+                      input.select();
+                      input.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                  }}
+                >
+                  <Icon.Plus size={13} /> Log first session
+                </button>
               </div>
             ) : (
               <ul className="irm-history">
@@ -476,7 +564,7 @@ export default function BookDetail() {
                       <span className="irm-mono">{log.pagesRead}</span>
                       <span className="irm-history__pages-label">pages</span>
                     </div>
-                    <button className="irm-logitem__delete" onClick={() => deleteReadingLog(log.id)}>
+                    <button className="irm-logitem__delete" style={{ opacity: 1 }} onClick={() => { if (confirm('Delete this reading session?')) deleteReadingLog(log.id); }}>
                       <Icon.Trash size={14} />
                     </button>
                   </li>
@@ -491,17 +579,7 @@ export default function BookDetail() {
           </SectionCard>
 
           {/* ── Reading pace chart ── */}
-          {bookLogs.length >= 2 && (
-          <SectionCard>
-            <SectionHead
-              title="Reading pace"
-              subtitle={<><span className="irm-mono">{bookLogs.length}</span> sessions</>}
-              expanded={paceColl.open}
-              onToggle={paceColl.toggle}
-            />
-            {paceColl.open && <PaceChart logs={bookLogs} height={60} />}
-          </SectionCard>
-          )}
+          {bookLogs.length >= 2 && <SectionCard><PaceChart logs={bookLogs} height={60} /></SectionCard>}
         </div>
       </div>
     </div>
