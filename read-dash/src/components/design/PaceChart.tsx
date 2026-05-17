@@ -93,8 +93,46 @@ export function PaceChart({ logs, today, height }: Props) {
       return slice.reduce((s, d) => s + d.pages, 0) / slice.length;
     });
 
-    // Trend delta: last MA value vs the MA at the midpoint.
-    const trendDelta = ma[ma.length - 1] - ma[Math.floor(ma.length / 2)];
+    // Trend: pages in the last calendar window vs the equivalent prior window.
+    //   ≥28 days of history → 14d vs prior 14d, labelled "vs prior 2 weeks"
+    //   ≥14 days           → 7d  vs prior 7d,  labelled "vs prior week"
+    //   shorter, or prior window has no reading → no trend shown.
+    // Calendar-based (not active-days) so a stretch of zero days correctly
+    // pulls the trend down instead of being invisible.
+    const trend = ((): { pct: number; label: string } | null => {
+      const anchor = today ?? days[days.length - 1].date;
+      const firstDateMs = new Date(days[0].date).getTime();
+      const anchorMs = new Date(anchor).getTime();
+      const spanDays = Math.round((anchorMs - firstDateMs) / 86400000) + 1;
+
+      let windowDays: number;
+      let label: string;
+      if (spanDays >= 28) {
+        windowDays = 14;
+        label = "vs prior 2 weeks";
+      } else if (spanDays >= 14) {
+        windowDays = 7;
+        label = "vs prior week";
+      } else {
+        return null;
+      }
+
+      const DAY_MS = 86400000;
+      const recentStart = anchorMs - (windowDays - 1) * DAY_MS;
+      const priorEnd = recentStart - DAY_MS;
+      const priorStart = priorEnd - (windowDays - 1) * DAY_MS;
+
+      let recent = 0;
+      let prior = 0;
+      for (const d of days) {
+        const t = new Date(d.date).getTime();
+        if (t >= recentStart && t <= anchorMs) recent += d.pages;
+        else if (t >= priorStart && t <= priorEnd) prior += d.pages;
+      }
+
+      if (prior === 0) return null; // no comparison baseline
+      return { pct: Math.round(((recent - prior) / prior) * 100), label };
+    })();
 
     // Tight-but-nice ceiling: ~5-25% headroom over `max`, never the 2× jumps the
     // old 1/2/5/10 ladder produced (peak=220 → 500 looked half-empty).
@@ -144,9 +182,9 @@ export function PaceChart({ logs, today, height }: Props) {
       innerW,
       barW,
       window,
-      trendDelta,
+      trend,
     };
-  }, [logs, VB_H]);
+  }, [logs, VB_H, today]);
 
   if (!data) return null;
   const {
@@ -160,7 +198,7 @@ export function PaceChart({ logs, today, height }: Props) {
     innerH,
     barW,
     window,
-    trendDelta,
+    trend,
   } = data;
 
   const maPath = smoothPath(points.map((p) => ({ x: p.x, y: p.maY })));
@@ -188,8 +226,7 @@ export function PaceChart({ logs, today, height }: Props) {
     today != null ? points.find((p) => p.date === today) ?? null : null;
   const tooltipFlip = hover ? hover.x > VB_W - 140 : false;
 
-  const trendPct = avg > 0 ? Math.round((trendDelta / avg) * 100) : 0;
-  const trendUp = trendDelta >= 0;
+  const trendUp = trend ? trend.pct >= 0 : false;
   const last7 = points.slice(-7).reduce((s, p) => s + p.pages, 0);
 
   return (
@@ -199,7 +236,7 @@ export function PaceChart({ logs, today, height }: Props) {
           <div className="irm-pace__title">Reading pace</div>
           <div className="irm-pace__sub">
             <span className="irm-mono">{points.length}</span> active days
-            {points.length >= 4 && (
+            {trend && (
               <>
                 {" · "}
                 <span
@@ -207,9 +244,9 @@ export function PaceChart({ logs, today, height }: Props) {
                     trendUp ? "up" : "down"
                   }`}
                 >
-                  {trendUp ? "▲" : "▼"} {Math.abs(trendPct)}%
+                  {trendUp ? "▲" : "▼"} {Math.abs(trend.pct)}%
                 </span>{" "}
-                <span className="irm-pace__trend-label">trend</span>
+                <span className="irm-pace__trend-label">{trend.label}</span>
               </>
             )}
           </div>
