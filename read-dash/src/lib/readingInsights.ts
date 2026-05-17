@@ -364,6 +364,37 @@ export function finishedSpans(books: BookData[], limit = 12): FinishedSpan[] {
     .slice(0, limit);
 }
 
+export interface DayOfWeekStats {
+  day: number; // 0 = Mon … 6 = Sun
+  label: string;
+  pages: number;
+  sessions: number;
+}
+
+const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/**
+ * Aggregates reading by ISO day-of-week (Mon-first). Returns 7 buckets even if
+ * some are zero, so callers can render a stable bar list without holes.
+ */
+export function dayOfWeekBreakdown(logs: ReadingLogData[]): DayOfWeekStats[] {
+  const buckets: DayOfWeekStats[] = DOW_LABELS.map((label, day) => ({
+    day,
+    label,
+    pages: 0,
+    sessions: 0,
+  }));
+  for (const l of logs) {
+    const [y, m, d] = l.date.split("-").map(Number);
+    if (!y || !m || !d) continue;
+    const jsDay = new Date(y, m - 1, d).getDay(); // 0 = Sun, 1 = Mon, …
+    const idx = jsDay === 0 ? 6 : jsDay - 1;
+    buckets[idx].pages += l.pagesRead || 0;
+    buckets[idx].sessions += 1;
+  }
+  return buckets;
+}
+
 export function formatEta(etaDate: string, today: string): string {
   const days = diffDays(etaDate, today);
   if (days <= 0) return "Today";

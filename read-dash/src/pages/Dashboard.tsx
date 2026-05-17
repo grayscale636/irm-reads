@@ -13,6 +13,7 @@ import { LogDialog } from "@/components/design/LogDialog";
 import { YearProjection } from "@/components/design/YearProjection";
 import { PersonalRecords } from "@/components/design/PersonalRecords";
 import { TopAuthors } from "@/components/design/TopAuthors";
+import { ReadingRhythm } from "@/components/design/ReadingRhythm";
 import { FinishedTimeline } from "@/components/design/FinishedTimeline";
 import { useCollapsible } from "@/hooks/use-collapsible";
 
@@ -160,12 +161,15 @@ export default function Dashboard() {
           </button>
         </div>
         {insights.open && (
-          <div className="irm-split">
+          <div className="irm-trio">
             <section className="irm-card">
               <PersonalRecords books={books} logs={readingLogs} />
             </section>
             <section className="irm-card">
               <TopAuthors books={books} />
+            </section>
+            <section className="irm-card">
+              <ReadingRhythm logs={readingLogs} />
             </section>
           </div>
         )}
