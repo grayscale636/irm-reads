@@ -128,6 +128,16 @@ export async function addBookNote(bookId: string, text: string): Promise<BookNot
   return response.json();
 }
 
+export async function updateBookNote(id: string, text: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/notes/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text }),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to update note');
+}
+
 export async function deleteBookNote(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/notes/${id}`, {
     method: 'DELETE',
@@ -159,4 +169,27 @@ export async function deleteReadingLog(id: string): Promise<void> {
   });
   if (response.status === 401) throw new Error('Unauthorized');
   if (!response.ok) throw new Error('Failed to delete reading log');
+}
+
+// Goals
+export async function getGoal(year: number): Promise<number | null> {
+  const response = await fetch(`${API_BASE}/goals/${year}`, {
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.target ?? null;
+}
+
+export async function setGoal(year: number, target: number | null): Promise<number | null> {
+  const response = await fetch(`${API_BASE}/goals/${year}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ target }),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to set goal');
+  const data = await response.json();
+  return data.target ?? null;
 }
