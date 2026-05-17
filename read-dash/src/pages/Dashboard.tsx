@@ -26,6 +26,25 @@ export default function Dashboard() {
   const [logDialog, setLogDialog] = useState<{ open: boolean; bookId: string | null }>({ open: false, bookId: null });
   const insights = useCollapsible("dashboard-insights", true);
 
+  const currentYear = new Date(today).getFullYear();
+  const [heatmapYear, setHeatmapYear] = useState(currentYear);
+  // Allow navigation back to the year of the earliest activity (or earliest
+  // started book), so empty years between activity stretches stay reachable.
+  const heatmapMinYear = useMemo(() => {
+    let min = currentYear;
+    for (const l of readingLogs) {
+      const y = parseInt(l.date.slice(0, 4), 10);
+      if (!Number.isNaN(y) && y < min) min = y;
+    }
+    for (const b of books) {
+      const d = b.startedAt || b.finishedAt;
+      if (!d) continue;
+      const y = parseInt(d.slice(0, 4), 10);
+      if (!Number.isNaN(y) && y < min) min = y;
+    }
+    return min;
+  }, [readingLogs, books, currentYear]);
+
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -95,6 +114,10 @@ export default function Dashboard() {
           today={today}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
+          year={heatmapYear}
+          onChangeYear={setHeatmapYear}
+          minYear={heatmapMinYear}
+          maxYear={currentYear}
         />
       </section>
 
