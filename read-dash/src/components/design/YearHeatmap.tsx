@@ -104,15 +104,24 @@ export function YearHeatmap({
     return { weeks: result, monthLabels: labels };
   }, [byDate, today, year]);
 
-  // Stats limited to the selected calendar year.
+  // Stats limited to the selected calendar year, plus monthly aggregation
+  // for the summary bar row below the calendar grid.
   const yearPrefix = `${year}-`;
   let totalPages = 0;
   let activeDays = 0;
+  const monthlyPages = new Array(12).fill(0) as number[];
   for (const [date, pages] of Object.entries(byDate)) {
     if (!date.startsWith(yearPrefix)) continue;
     totalPages += pages;
     if (pages > 0) activeDays += 1;
+    const m = parseInt(date.slice(5, 7), 10) - 1;
+    if (m >= 0 && m < 12) monthlyPages[m] += pages;
   }
+  const monthlyMax = Math.max(...monthlyPages, 1);
+  const bestMonthIdx = monthlyPages.reduce(
+    (best, v, i) => (v > monthlyPages[best] ? i : best),
+    0,
+  );
 
   // Years available in the side selector (newest first), like the GitHub
   // contribution graph's year list.
@@ -206,6 +215,31 @@ export function YearHeatmap({
           </div>
         )}
       </div>
+
+      {totalPages > 0 && (
+        <div className="irm-heatmap__monthbars" aria-label="Monthly pages">
+          {MONTH_NAMES.map((name, i) => {
+            const pages = monthlyPages[i];
+            const pct = monthlyMax > 0 ? (pages / monthlyMax) * 100 : 0;
+            const isBest = pages > 0 && i === bestMonthIdx;
+            return (
+              <div
+                key={i}
+                className={`irm-heatmap__monthbar${isBest ? " is-best" : ""}`}
+                title={`${name} ${year} · ${pages.toLocaleString()} pages`}
+              >
+                <div className="irm-heatmap__monthbar-track">
+                  <div
+                    className="irm-heatmap__monthbar-fill"
+                    style={{ height: `${pct}%` }}
+                  />
+                </div>
+                <div className="irm-heatmap__monthbar-label">{name}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
