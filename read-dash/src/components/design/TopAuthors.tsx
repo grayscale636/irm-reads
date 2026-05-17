@@ -6,7 +6,9 @@ interface Props {
 }
 
 export function TopAuthors({ books }: Props) {
-  const top = topAuthors(books, 5);
+  // Pull top 10; the list scrolls past row 4 in the UI so the card height
+  // matches its trio neighbours.
+  const top = topAuthors(books, 10);
   const max = top[0]?.pages ?? 1;
   const uniqueAuthors = new Set(books.map((b) => (b.author || "Unknown").trim() || "Unknown")).size;
 

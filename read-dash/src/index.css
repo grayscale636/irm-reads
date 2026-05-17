@@ -1306,7 +1306,18 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* Show ~4 authors, scroll for the rest. Keeps the card height aligned with
+   * its trio neighbours (PersonalRecords, ReadingRhythm) instead of growing
+   * to fit 10 entries. */
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  padding-right: 4px;
 }
+.irm-authors::-webkit-scrollbar { width: 6px; }
+.irm-authors::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+.irm-authors::-webkit-scrollbar-track { background: transparent; }
 
 /* ── Reading rhythm (day-of-week breakdown) ──────────────────────────── */
 .irm-rhythm {
