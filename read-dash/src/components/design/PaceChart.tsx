@@ -96,10 +96,23 @@ export function PaceChart({ logs, today, height }: Props) {
     // Trend delta: last MA value vs the MA at the midpoint.
     const trendDelta = ma[ma.length - 1] - ma[Math.floor(ma.length / 2)];
 
+    // Tight-but-nice ceiling: ~5-25% headroom over `max`, never the 2× jumps the
+    // old 1/2/5/10 ladder produced (peak=220 → 500 looked half-empty).
     const niceMax = (() => {
-      const step = Math.pow(10, Math.floor(Math.log10(max || 1)));
+      if (max <= 0) return 1;
+      const step = Math.pow(10, Math.floor(Math.log10(max)));
       const m = max / step;
-      const niceM = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
+      const niceM =
+        m <= 1.2 ? 1.2 :
+        m <= 1.5 ? 1.5 :
+        m <= 2 ? 2 :
+        m <= 2.5 ? 2.5 :
+        m <= 3 ? 3 :
+        m <= 4 ? 4 :
+        m <= 5 ? 5 :
+        m <= 6 ? 6 :
+        m <= 8 ? 8 :
+        10;
       return niceM * step;
     })();
     const yTicks = [0, niceMax / 2, niceMax];
