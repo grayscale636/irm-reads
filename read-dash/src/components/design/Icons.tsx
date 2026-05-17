@@ -78,6 +78,11 @@ export const Icon = {
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
+  Edit: ({ size = 14 }: IconProps) => (
+    <svg {...base(size)}>
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  ),
   Check: ({ size = 16 }: IconProps) => (
     <svg {...base(size)}>
       <polyline points="20 6 9 17 4 12" />
