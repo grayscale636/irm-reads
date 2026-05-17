@@ -148,9 +148,9 @@ app.use('/api/notes', notesRouter);
 app.use('/api/goals', goalsRouter);
 
 // Error handler - include CORS headers even on errors
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err.message);
-  
+
   // Ensure CORS headers are set even on errors
   const origin = req.headers.origin;
   if (origin) {
@@ -160,7 +160,15 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
       res.header('Access-Control-Allow-Credentials', 'true');
     }
   }
-  
+
+  // Malformed JSON body from a client → return 400 with a descriptive message
+  // instead of a generic 500 that suggests our server crashed.
+  const type = (err as Error & { type?: string }).type;
+  if (err instanceof SyntaxError && type === 'entity.parse.failed') {
+    res.status(400).json({ error: 'Invalid JSON body' });
+    return;
+  }
+
   res.status(500).json({ error: 'Internal server error' });
 });
 
