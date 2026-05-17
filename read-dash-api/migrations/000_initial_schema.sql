@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS books (
   cover TEXT,
   rating INTEGER DEFAULT 0,
   progress INTEGER DEFAULT 0,
-  status VARCHAR(50) DEFAULT 'want-to-read',
+  status VARCHAR(50) DEFAULT 'want-to-read'
+    CHECK (status IN ('reading', 'completed', 'want-to-read', 'paused', 'dnf')),
   pages_read INTEGER DEFAULT 0,
   total_pages INTEGER DEFAULT 0,
   reflection TEXT,
