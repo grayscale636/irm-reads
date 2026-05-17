@@ -812,6 +812,15 @@ button { font-family: inherit; }
   gap: 20px;
 }
 
+/* Heatmap (wide) + YearProjection (narrow) row. Right column fixed so the
+ * heatmap card always has enough room for its 53-week grid + year list. */
+.irm-yearrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: stretch;
+}
+
 /* ── Footer ────────────────────────────────────────── */
 .irm-footer-wrap {
   max-width: 1320px;
@@ -2188,6 +2197,7 @@ button { font-family: inherit; }
   .irm-split { grid-template-columns: 1fr; }
   .irm-current__grid { grid-template-columns: 1fr; }
   .irm-trio { grid-template-columns: 1fr; }
+  .irm-yearrow { grid-template-columns: 1fr; }
   .irm-timeline__row { grid-template-columns: 140px 1fr 44px; gap: 10px; }
   .irm-timeline__axis { padding-left: 150px; padding-right: 54px; }
   .irm-yir { padding: 28px; gap: 22px; }

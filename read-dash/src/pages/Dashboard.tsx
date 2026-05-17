@@ -108,18 +108,23 @@ export default function Dashboard() {
         onChangeStatus={(id, status) => updateBook(id, { status })}
       />
 
-      <section className="irm-card">
-        <YearHeatmap
-          logs={readingLogs}
-          today={today}
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-          year={heatmapYear}
-          onChangeYear={setHeatmapYear}
-          minYear={heatmapMinYear}
-          maxYear={currentYear}
-        />
-      </section>
+      <div className="irm-yearrow">
+        <section className="irm-card">
+          <YearHeatmap
+            logs={readingLogs}
+            today={today}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            year={heatmapYear}
+            onChangeYear={setHeatmapYear}
+            minYear={heatmapMinYear}
+            maxYear={currentYear}
+          />
+        </section>
+        <section className="irm-card">
+          <YearProjection books={books} logs={readingLogs} today={today} />
+        </section>
+      </div>
 
       <div className="irm-split">
         <section className="irm-card">
@@ -155,10 +160,7 @@ export default function Dashboard() {
           </button>
         </div>
         {insights.open && (
-          <div className="irm-trio">
-            <section className="irm-card">
-              <YearProjection books={books} logs={readingLogs} today={today} />
-            </section>
+          <div className="irm-split">
             <section className="irm-card">
               <PersonalRecords books={books} logs={readingLogs} />
             </section>
