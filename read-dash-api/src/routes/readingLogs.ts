@@ -55,6 +55,15 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       INSERT INTO reading_logs (id, user_id, book_id, date, pages_read, start_page, end_page)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [log.id, req.userId, log.bookId, log.date, log.pagesRead, log.startPage, log.endPage]);
+
+    // Update book's pages_read to the highest end_page for this book
+    await pool.query(`
+      UPDATE books
+      SET pages_read = GREATEST(pages_read, $1),
+          progress = LEAST(100, ROUND((GREATEST(pages_read, $1)::float / NULLIF(total_pages, 0)) * 100))
+      WHERE id = $2 AND user_id = $3
+    `, [log.endPage, log.bookId, req.userId]);
+
     res.status(201).json({ message: 'Reading log created', id: log.id });
   } catch (error) {
     console.error('Error creating reading log:', error);
@@ -66,7 +75,25 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    // Get book_id before deleting so we can recalculate
+    const logResult = await pool.query('SELECT book_id, end_page FROM reading_logs WHERE id = $1 AND user_id = $2', [id, req.userId]);
+    const log = logResult.rows[0];
+
     const result = await pool.query('DELETE FROM reading_logs WHERE id = $1 AND user_id = $2', [id, req.userId]);
+
+    // Recalculate book's pages_read from remaining logs
+    if (log) {
+      await pool.query(`
+        UPDATE books
+        SET pages_read = COALESCE((
+          SELECT COALESCE(MAX(end_page), 0) FROM reading_logs WHERE book_id = $1 AND user_id = $2
+        ), 0),
+            progress = LEAST(100, ROUND((COALESCE((
+              SELECT COALESCE(MAX(end_page), 0) FROM reading_logs WHERE book_id = $1 AND user_id = $2
+            ), 0)::float / NULLIF(total_pages, 0)) * 100))
+        WHERE id = $1 AND user_id = $2
+      `, [log.book_id, req.userId]);
+    }
     
     if (result.rowCount === 0) {
       res.status(404).json({ error: 'Reading log not found' });
