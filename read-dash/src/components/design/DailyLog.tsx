@@ -69,36 +69,38 @@ export function DailyLog({ logs, books, selectedDate, today, onClearDate, onLogR
           </button>
         </div>
       ) : (
-        <ul className="irm-loglist">
-          {dayLogs.map((log) => (
-            <li key={log.id} className="irm-logitem">
-              <BookCover book={log.book} size="sm" />
-              <div className="irm-logitem__body">
-                <div className="irm-logitem__title">{log.book.title}</div>
-                <div className="irm-logitem__meta irm-mono">
-                  {log.startPage > 0 ? (
-                    <>
-                      p.{log.startPage} → p.{log.endPage}
-                    </>
-                  ) : (
-                    <>session</>
-                  )}
+        <>
+          <ul className="irm-loglist">
+            {dayLogs.map((log) => (
+              <li key={log.id} className="irm-logitem">
+                <BookCover book={log.book} size="sm" />
+                <div className="irm-logitem__body">
+                  <div className="irm-logitem__title">{log.book.title}</div>
+                  <div className="irm-logitem__meta irm-mono">
+                    {log.startPage > 0 ? (
+                      <>
+                        p.{log.startPage} → p.{log.endPage}
+                      </>
+                    ) : (
+                      <>session</>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="irm-logitem__pages">
-                <span className="irm-mono irm-logitem__pages-num">{log.pagesRead}</span>
-                <span className="irm-logitem__pages-label">pages</span>
-              </div>
-              <button className="irm-logitem__delete" style={{ opacity: 1 }} onClick={() => { if (confirm('Delete this reading session?')) onDelete(log.id); }} title="Delete">
-                <Icon.Trash size={14} />
-              </button>
-            </li>
-          ))}
-          <li className="irm-loglist__total">
+                <div className="irm-logitem__pages">
+                  <span className="irm-mono irm-logitem__pages-num">{log.pagesRead}</span>
+                  <span className="irm-logitem__pages-label">pages</span>
+                </div>
+                <button className="irm-logitem__delete" style={{ opacity: 1 }} onClick={() => { if (confirm('Delete this reading session?')) onDelete(log.id); }} title="Delete">
+                  <Icon.Trash size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="irm-loglist__total">
             <span>Total</span>
             <span className="irm-mono">{totalPages} pages</span>
-          </li>
-        </ul>
+          </div>
+        </>
       )}
     </section>
   );

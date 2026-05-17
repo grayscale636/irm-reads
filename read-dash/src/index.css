@@ -662,7 +662,16 @@ button { font-family: inherit; }
   padding: 0;
   display: flex;
   flex-direction: column;
+  /* Cap at ~2 sessions so a busy Today doesn't stretch the dashboard split
+   * column (and balloon the Reading pace card next to it). Scrolls past that. */
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
+.irm-loglist::-webkit-scrollbar { width: 6px; }
+.irm-loglist::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+.irm-loglist::-webkit-scrollbar-track { background: transparent; }
 .irm-logitem {
   display: flex;
   align-items: center;
