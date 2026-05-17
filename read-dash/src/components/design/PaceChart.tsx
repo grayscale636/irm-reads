@@ -1,9 +1,15 @@
 import { useMemo, useRef, useState } from "react";
-import type { ReadingLog } from "@/lib/api";
+
+interface PaceLog {
+  date: string;
+  pagesRead: number;
+}
 
 interface Props {
-  logs: ReadingLog[];
+  logs: PaceLog[];
   today?: string;
+  /** Override SVG viewBox height for compact contexts (default 140). */
+  height?: number;
 }
 
 interface DayPoint {
@@ -16,7 +22,7 @@ interface DayPoint {
 }
 
 const VB_W = 640;
-const VB_H = 140;
+const DEFAULT_VB_H = 140;
 const PAD = { top: 14, right: 12, bottom: 22, left: 28 };
 
 function formatTooltipDate(iso: string): string {
@@ -55,9 +61,10 @@ function smoothPath(pts: { x: number; y: number }[]): string {
   return d;
 }
 
-export function PaceChart({ logs, today }: Props) {
+export function PaceChart({ logs, today, height }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const VB_H = Math.max(60, height ?? DEFAULT_VB_H);
 
   const data = useMemo(() => {
     if (logs.length === 0) return null;
@@ -126,7 +133,7 @@ export function PaceChart({ logs, today }: Props) {
       window,
       trendDelta,
     };
-  }, [logs]);
+  }, [logs, VB_H]);
 
   if (!data) return null;
   const {
