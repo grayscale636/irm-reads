@@ -44,7 +44,10 @@ export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
     let pr = parseInt(pagesRead, 10) || 0;
     if (status === "completed") pr = tp;
     if (status === "want-to-read") pr = 0;
+    pr = Math.max(0, Math.min(tp, pr));
     const progress = tp > 0 ? Math.round((pr / tp) * 100) : 0;
+    const needsStarted =
+      status === "reading" || status === "paused" || status === "dnf" || status === "completed";
     onSubmit({
       title: title.trim(),
       author: author.trim(),
@@ -54,7 +57,7 @@ export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
       progress,
       status,
       rating: status === "completed" ? rating : 0,
-      startedAt: status === "reading" || status === "completed" ? (startedAt || today) : undefined,
+      startedAt: needsStarted ? (startedAt || today) : undefined,
       finishedAt: status === "completed" ? (finishedAt || today) : undefined,
       reflection: "",
       quotes: [],
@@ -99,11 +102,13 @@ export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
               >
                 <option value="want-to-read">Want to read</option>
                 <option value="reading">Reading</option>
+                <option value="paused">Paused</option>
                 <option value="completed">Completed</option>
+                <option value="dnf">DNF (Did not finish)</option>
               </select>
             </label>
           </div>
-          {status === "reading" && (
+          {(status === "reading" || status === "paused" || status === "dnf") && (
             <div className="irm-field-row">
               <label className="irm-field">
                 <span className="irm-field__label">Date started</span>
