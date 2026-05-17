@@ -542,43 +542,39 @@ button { font-family: inherit; }
   gap: 16px;
   margin-bottom: 18px;
 }
-.irm-heatmap__title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
+.irm-heatmap__title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.irm-heatmap__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
 }
-.irm-heatmap__yearpicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.irm-heatmap__main .irm-heatmap__scroll { flex: 1; min-width: 0; }
+.irm-heatmap__yearlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 56px;
+  padding-top: 18px;
+  flex-shrink: 0;
 }
-.irm-heatmap__yearbtn {
+.irm-heatmap__yearitem {
   background: transparent;
   border: 0;
-  padding: 2px 4px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 13px;
   color: var(--ink-muted);
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 4px;
+  text-align: right;
+  border-radius: 6px;
   transition: color 0.15s, background 0.15s;
+  font-variant-numeric: tabular-nums;
 }
-.irm-heatmap__yearbtn:hover:not(:disabled) { color: var(--ink); background: var(--bg-elev); }
-.irm-heatmap__yearbtn:disabled { opacity: 0.3; cursor: not-allowed; }
-.irm-heatmap__year {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+.irm-heatmap__yearitem:hover { color: var(--ink); background: var(--bg-sunken); }
+.irm-heatmap__yearitem.is-active {
   color: var(--ink);
-  min-width: 36px;
-  text-align: center;
+  font-weight: 600;
+  background: var(--bg-sunken);
 }
 .irm-heatmap__sub { font-size: 13px; color: var(--ink-muted); margin-top: 4px; }
 .irm-heatmap__legend {
@@ -652,8 +648,14 @@ button { font-family: inherit; }
 .irm-heatmap__cell:hover:not(:disabled) { outline: 1.5px solid var(--ink); outline-offset: 1px; }
 .irm-heatmap__cell.is-selected { outline: 2px solid var(--ink); outline-offset: 1px; }
 .irm-heatmap__cell.is-today { box-shadow: inset 0 0 0 1.5px var(--bg-elev), inset 0 0 0 2.5px var(--ink); }
-.irm-heatmap__cell.is-future { opacity: 0; pointer-events: none; }
-.irm-heatmap__cell.is-out { visibility: hidden; pointer-events: none; }
+/* GitHub-style: future and out-of-year cells still render as empty level-0
+ * boxes so the grid stays rectangular — they're just non-interactive. */
+.irm-heatmap__cell.is-future,
+.irm-heatmap__cell.is-out {
+  pointer-events: none;
+  cursor: default;
+}
+.irm-heatmap__cell.is-out { opacity: 0.5; }
 .irm-heatmap__legend .irm-heatmap__cell { width: 10px; height: 10px; cursor: default; }
 
 /* ── Pace chart ────────────────────────────────────────── */
@@ -2218,6 +2220,15 @@ button { font-family: inherit; }
   .irm-history__item { grid-template-columns: 60px 1fr auto; gap: 10px; }
   .irm-history__range { display: none; }
   .irm-detail__pages-inputs { flex-wrap: wrap; }
+  .irm-heatmap__main { flex-direction: column; gap: 8px; }
+  .irm-heatmap__yearlist {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-top: 0;
+    min-width: 0;
+    width: 100%;
+  }
+  .irm-heatmap__yearitem { text-align: center; padding: 4px 10px; }
 }
 @media (max-width: 480px) {
   .irm-statgrid { grid-template-columns: 1fr 1fr; gap: 8px; }

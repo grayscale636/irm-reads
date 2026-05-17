@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import type { ReadingLogData } from "@/contexts/BooksContext";
-import { Icon } from "./Icons";
 
 interface Props {
   logs: ReadingLogData[];
@@ -57,9 +56,8 @@ export function YearHeatmap({
     const todayDate = new Date(today);
     todayDate.setHours(0, 0, 0, 0);
 
-    // Grid spans the Sunday on/before Jan 1 → Saturday on/after Dec 31,
-    // mirroring the GitHub contribution graph. Cells outside the year are
-    // rendered as invisible placeholders so columns stay aligned.
+    // Sunday on/before Jan 1 → Saturday on/after Dec 31, GitHub-style.
+    // Out-of-year cells stay rendered as empty placeholders (level-0).
     const jan1 = new Date(year, 0, 1);
     const dec31 = new Date(year, 11, 31);
     const start = new Date(jan1);
@@ -116,37 +114,19 @@ export function YearHeatmap({
     if (pages > 0) activeDays += 1;
   }
 
-  const canGoPrev = year > minYear;
-  const canGoNext = year < maxYear;
+  // Years available in the side selector (newest first), like the GitHub
+  // contribution graph's year list.
+  const years = useMemo(() => {
+    const ys: number[] = [];
+    for (let y = maxYear; y >= minYear; y--) ys.push(y);
+    return ys;
+  }, [minYear, maxYear]);
 
   return (
     <div className="irm-heatmap">
       <div className="irm-heatmap__header">
         <div>
-          <div className="irm-heatmap__title">
-            Reading activity
-            <span className="irm-heatmap__yearpicker">
-              <button
-                type="button"
-                className="irm-heatmap__yearbtn"
-                onClick={() => canGoPrev && onChangeYear(year - 1)}
-                disabled={!canGoPrev}
-                aria-label="Previous year"
-              >
-                <Icon.ChevronLeft size={14} />
-              </button>
-              <span className="irm-heatmap__year irm-mono">{year}</span>
-              <button
-                type="button"
-                className="irm-heatmap__yearbtn"
-                onClick={() => canGoNext && onChangeYear(year + 1)}
-                disabled={!canGoNext}
-                aria-label="Next year"
-              >
-                <Icon.ChevronRight size={14} />
-              </button>
-            </span>
-          </div>
+          <div className="irm-heatmap__title">Reading activity</div>
           <div className="irm-heatmap__sub">
             <span className="irm-mono">{totalPages.toLocaleString()}</span> pages across{" "}
             <span className="irm-mono">{activeDays}</span> days in {year}
@@ -161,51 +141,70 @@ export function YearHeatmap({
         </div>
       </div>
 
-      <div className="irm-heatmap__scroll">
-        <div className="irm-heatmap__grid-wrap">
-          <div className="irm-heatmap__months">
-            {monthLabels.map((m, i) => (
-              <span key={i} className="irm-heatmap__month" style={{ left: `${m.col * 14}px` }}>
-                {m.name}
-              </span>
-            ))}
-          </div>
-          <div className="irm-heatmap__body">
-            <div className="irm-heatmap__daylabels">
-              <span>Mon</span>
-              <span>Wed</span>
-              <span>Fri</span>
-            </div>
-            <div className="irm-heatmap__grid">
-              {weeks.map((week, wi) => (
-                <div key={wi} className="irm-heatmap__week">
-                  {week.map((day, di) => {
-                    const lv = intensity(day.pages);
-                    const isSelected = day.date === selectedDate;
-                    const isToday = day.date === today;
-                    const disabled = day.isFuture || !day.inYear;
-                    return (
-                      <button
-                        key={di}
-                        type="button"
-                        className={
-                          `irm-heatmap__cell irm-heatmap__cell--lv${lv}` +
-                          (isSelected ? " is-selected" : "") +
-                          (isToday ? " is-today" : "") +
-                          (day.isFuture ? " is-future" : "") +
-                          (!day.inYear ? " is-out" : "")
-                        }
-                        title={day.inYear ? `${day.date} · ${day.pages} pages` : ""}
-                        onClick={() => !disabled && onSelectDate(day.date)}
-                        disabled={disabled}
-                      ></button>
-                    );
-                  })}
-                </div>
+      <div className="irm-heatmap__main">
+        <div className="irm-heatmap__scroll">
+          <div className="irm-heatmap__grid-wrap">
+            <div className="irm-heatmap__months">
+              {monthLabels.map((m, i) => (
+                <span key={i} className="irm-heatmap__month" style={{ left: `${m.col * 14}px` }}>
+                  {m.name}
+                </span>
               ))}
+            </div>
+            <div className="irm-heatmap__body">
+              <div className="irm-heatmap__daylabels">
+                <span>Mon</span>
+                <span>Wed</span>
+                <span>Fri</span>
+              </div>
+              <div className="irm-heatmap__grid">
+                {weeks.map((week, wi) => (
+                  <div key={wi} className="irm-heatmap__week">
+                    {week.map((day, di) => {
+                      const lv = intensity(day.pages);
+                      const isSelected = day.inYear && day.date === selectedDate;
+                      const isToday = day.inYear && day.date === today;
+                      const disabled = day.isFuture || !day.inYear;
+                      return (
+                        <button
+                          key={di}
+                          type="button"
+                          className={
+                            `irm-heatmap__cell irm-heatmap__cell--lv${lv}` +
+                            (isSelected ? " is-selected" : "") +
+                            (isToday ? " is-today" : "") +
+                            (day.isFuture ? " is-future" : "") +
+                            (!day.inYear ? " is-out" : "")
+                          }
+                          title={day.inYear && !day.isFuture ? `${day.date} · ${day.pages} pages` : ""}
+                          onClick={() => !disabled && onSelectDate(day.date)}
+                          disabled={disabled}
+                        ></button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
+
+        {years.length > 1 && (
+          <div className="irm-heatmap__yearlist" role="tablist" aria-label="Year">
+            {years.map((y) => (
+              <button
+                key={y}
+                type="button"
+                role="tab"
+                aria-selected={y === year}
+                className={`irm-heatmap__yearitem${y === year ? " is-active" : ""}`}
+                onClick={() => onChangeYear(y)}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
