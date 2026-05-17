@@ -4,6 +4,7 @@ import { useTheme } from "@/hooks/use-theme";
 import AppLayout from "@/layouts/AppLayout";
 import Library from "./pages/Library";
 import Dashboard from "./pages/Dashboard";
+import Journal from "./pages/Journal";
 import BookDetail from "./pages/BookDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -50,6 +51,7 @@ function AppRoutes() {
       >
         <Route path="/" element={<Library />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/journal" element={<Journal />} />
         <Route path="/book/:id" element={<BookDetail />} />
       </Route>
 

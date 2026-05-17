@@ -870,6 +870,117 @@ button { font-family: inherit; }
   align-items: stretch;
 }
 
+/* ── Journal (notes + quotes hub) ────────────────────────────────────────── */
+.irm-journal__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.irm-journal__toolbar .irm-tabs { border-bottom: 0; margin-bottom: 0; }
+.irm-journal__search {
+  width: 320px;
+  position: relative;
+}
+.irm-journal__searchclear {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+.irm-journal__searchclear:hover { color: var(--ink); background: var(--bg-elev); }
+
+.irm-journal {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.irm-journal__item {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s;
+}
+.irm-journal__item:hover { border-color: var(--border-strong); }
+.irm-journal__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.irm-journal__book {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+}
+.irm-journal__book:hover .irm-journal__book-title { color: var(--accent); }
+.irm-journal__book-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s;
+}
+.irm-journal__book-author {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.irm-journal__date {
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.irm-journal__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+.irm-journal__text--quote {
+  font-style: italic;
+  color: var(--ink);
+  position: relative;
+  padding-left: 16px;
+}
+.irm-journal__quotemark {
+  position: absolute;
+  left: -2px;
+  top: -6px;
+  font-family: Georgia, serif;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 700;
+}
+.irm-pill--note { background: var(--accent-soft); color: var(--accent); }
+.irm-pill--quote { background: var(--bg-sunken); color: var(--ink-soft); }
+
 /* ── Footer ────────────────────────────────────────── */
 .irm-footer-wrap {
   max-width: 1320px;
@@ -2342,6 +2453,8 @@ button { font-family: inherit; }
   .irm-history__item { grid-template-columns: 60px 1fr auto; gap: 10px; }
   .irm-history__range { display: none; }
   .irm-detail__pages-inputs { flex-wrap: wrap; }
+  .irm-journal__toolbar { flex-direction: column; align-items: stretch; }
+  .irm-journal__search { width: 100%; }
   .irm-heatmap__main { flex-direction: column; gap: 8px; }
   .irm-heatmap__yearlist {
     flex-direction: row;

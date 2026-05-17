@@ -5,6 +5,25 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 const router = Router();
 router.use(authMiddleware);
 
+// Get all notes for current user, joined with book info (for the Journal page)
+router.get('/', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT n.id, n.book_id as "bookId", n.text,
+             n.created_at::text as "createdAt",
+             b.title as "bookTitle", b.author as "bookAuthor"
+      FROM book_notes n
+      JOIN books b ON b.id = n.book_id
+      WHERE n.user_id = $1
+      ORDER BY n.created_at DESC
+    `, [req.userId]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching all notes:', error);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
 // Get all notes for book
 router.get('/book/:bookId', async (req: AuthRequest, res: Response) => {
   try {

@@ -108,6 +108,20 @@ export interface BookNote {
   createdAt: string;
 }
 
+export interface JournalNote extends BookNote {
+  bookTitle: string;
+  bookAuthor: string;
+}
+
+export async function getAllNotes(): Promise<JournalNote[]> {
+  const response = await fetch(`${API_BASE}/notes`, {
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to fetch notes');
+  return response.json();
+}
+
 export async function getBookNotes(bookId: string): Promise<BookNote[]> {
   const response = await fetch(`${API_BASE}/notes/book/${bookId}`, {
     headers: getAuthHeaders()

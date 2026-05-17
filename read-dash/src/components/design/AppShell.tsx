@@ -30,9 +30,11 @@ export function AppShell({ searchQuery, onSearchChange, onAddBook, children }: P
 
   const route = location.pathname.startsWith("/dashboard")
     ? "dashboard"
-    : location.pathname.startsWith("/book")
-      ? "book"
-      : "library";
+    : location.pathname.startsWith("/journal")
+      ? "journal"
+      : location.pathname.startsWith("/book")
+        ? "book"
+        : "library";
 
   return (
     <div className="irm-app">
@@ -54,6 +56,12 @@ export function AppShell({ searchQuery, onSearchChange, onAddBook, children }: P
               onClick={() => navigate("/dashboard")}
             >
               Dashboard
+            </button>
+            <button
+              className={`irm-nav__item ${route === "journal" ? "is-active" : ""}`}
+              onClick={() => navigate("/journal")}
+            >
+              Journal
             </button>
           </nav>
           <div className="irm-header__right">
