@@ -1863,6 +1863,11 @@ button { font-family: inherit; }
   justify-content: space-between;
   margin-bottom: 6px;
 }
+.irm-note__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .irm-note__meta {
   display: flex;
   align-items: center;
