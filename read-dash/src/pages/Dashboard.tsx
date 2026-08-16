@@ -15,6 +15,7 @@ import { PersonalRecords } from "@/components/design/PersonalRecords";
 import { TopAuthors } from "@/components/design/TopAuthors";
 import { ReadingRhythm } from "@/components/design/ReadingRhythm";
 import { FinishedTimeline } from "@/components/design/FinishedTimeline";
+import { OnThisDay } from "@/components/design/OnThisDay";
 import { useCollapsible } from "@/hooks/use-collapsible";
 
 export default function Dashboard() {
@@ -143,6 +144,8 @@ export default function Dashboard() {
           />
         </section>
       </div>
+
+      <OnThisDay books={books} today={today} onOpenBook={(id) => navigate(`/book/${id}`)} />
 
       <section>
         <div className="irm-section-head">
