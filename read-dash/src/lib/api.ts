@@ -173,6 +173,26 @@ export async function deleteBookNote(id: string): Promise<void> {
   if (!response.ok) throw new Error('Failed to delete note');
 }
 
+// ============ AI DRAFTS ============
+
+export type AIDraftMode = 'recap' | 'reflection';
+
+/** One-shot AI draft (recap of progress, or a reflection draft from notes). */
+export async function generateAIDraft(bookId: string, mode: AIDraftMode): Promise<string> {
+  const response = await fetch(`${API_BASE}/ai/generate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ bookId, mode }),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({} as { error?: string }));
+    throw new Error(err.error || 'Failed to generate draft');
+  }
+  const data = await response.json();
+  return data.draft as string;
+}
+
 // Alias for getAllReadingLogs
 export const fetchReadingLogs = getAllReadingLogs;
 

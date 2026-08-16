@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "./Icons";
+import { generateAIDraft } from "@/lib/api";
 
 /**
  * Guided prompts shown when a reader finishes a book. Each answer is stored
@@ -55,26 +56,44 @@ function parseReflection(text: string): string[] {
 
 interface Props {
   open: boolean;
+  bookId: string;
   bookTitle: string;
   initial?: string;
   onClose: () => void;
   onSave: (reflection: string) => void | Promise<void>;
 }
 
-export function ReflectionDialog({ open, bookTitle, initial, onClose, onSave }: Props) {
+export function ReflectionDialog({ open, bookId, bookTitle, initial, onClose, onSave }: Props) {
   const [answers, setAnswers] = useState<string[]>(PROMPTS.map(() => ""));
   const [saving, setSaving] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
       setAnswers(parseReflection(initial || ""));
       setSaving(false);
+      setDrafting(false);
+      setError("");
     }
   }, [open, initial]);
 
   if (!open) return null;
 
   const hasContent = answers.some((a) => a.trim());
+
+  const handleDraft = async () => {
+    setDrafting(true);
+    setError("");
+    try {
+      const draft = await generateAIDraft(bookId, "reflection");
+      setAnswers(parseReflection(draft));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal bikin draft.");
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -96,10 +115,30 @@ export function ReflectionDialog({ open, bookTitle, initial, onClose, onSave }: 
           </button>
         </div>
         <div className="irm-dialog__body">
-          <p className="irm-reflect__intro">
-            Sebelum buku ini masuk arsip, luangin sebentar buat ngerangkum kesanmu. Nggak
-            wajib diisi semua — jawab yang kepikiran aja.
-          </p>
+          <div className="irm-reflect__introrow">
+            <p className="irm-reflect__intro">
+              Sebelum buku ini masuk arsip, luangin sebentar buat ngerangkum kesanmu. Nggak
+              wajib diisi semua — jawab yang kepikiran aja.
+            </p>
+            <button
+              type="button"
+              className="irm-btn irm-btn--ghost irm-ai-draft-btn"
+              onClick={handleDraft}
+              disabled={drafting || saving}
+              title="Bikin draft dari catatanmu pakai Bacain"
+            >
+              {drafting ? (
+                <span className="irm-ai-draft-btn__loading">
+                  <span className="irm-ai__dot" />
+                  <span className="irm-ai__dot" />
+                  <span className="irm-ai__dot" />
+                </span>
+              ) : (
+                <>✨ Draftin dari catatan</>
+              )}
+            </button>
+          </div>
+          {error && <p className="irm-reflect__error">{error}</p>}
           {PROMPTS.map((p, i) => (
             <label className="irm-field" key={p.heading}>
               <span className="irm-field__label">{p.label}</span>

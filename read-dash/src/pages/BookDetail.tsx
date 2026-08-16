@@ -8,7 +8,7 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, type BookNote, type NoteType } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, type BookNote, type NoteType } from "@/lib/api";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import ReactMarkdown from "react-markdown";
@@ -91,6 +91,7 @@ export default function BookDetail() {
   const [quoteInput, setQuoteInput] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [showReflect, setShowReflect] = useState(false);
+  const [recapLoading, setRecapLoading] = useState(false);
 
   const notesColl = useCollapsible("book-notes", true);
   const reflectColl = useCollapsible("book-reflection", true);
@@ -189,6 +190,22 @@ export default function BookDetail() {
     setNotePage(book.pagesRead ? String(book.pagesRead) : "");
     setNoteTags("");
     setShowNoteForm(true);
+  };
+
+  const generateRecap = async () => {
+    setRecapLoading(true);
+    try {
+      const draft = await generateAIDraft(book.id, "recap");
+      setNoteType("note");
+      setNotePage(book.pagesRead ? String(book.pagesRead) : "");
+      setNoteTags("recap");
+      setNoteInput(draft);
+      setShowNoteForm(true);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Gagal bikin rangkuman.");
+    } finally {
+      setRecapLoading(false);
+    }
   };
 
   const addNote = async () => {
@@ -457,9 +474,29 @@ export default function BookDetail() {
               onToggle={notesColl.toggle}
               action={
                 notesColl.open && !showNoteForm && (
-                  <button className="irm-btn irm-btn--ghost" onClick={openNoteForm}>
-                    <Icon.Plus size={13} /> Add note
-                  </button>
+                  <>
+                    {book.status !== "want-to-read" && book.pagesRead > 0 && (
+                      <button
+                        className="irm-btn irm-btn--ghost irm-ai-draft-btn"
+                        onClick={generateRecap}
+                        disabled={recapLoading}
+                        title="Bacain rangkumin progresmu jadi draft catatan"
+                      >
+                        {recapLoading ? (
+                          <span className="irm-ai-draft-btn__loading">
+                            <span className="irm-ai__dot" />
+                            <span className="irm-ai__dot" />
+                            <span className="irm-ai__dot" />
+                          </span>
+                        ) : (
+                          <>✨ Rangkum progres</>
+                        )}
+                      </button>
+                    )}
+                    <button className="irm-btn irm-btn--ghost" onClick={openNoteForm}>
+                      <Icon.Plus size={13} /> Add note
+                    </button>
+                  </>
                 )
               }
             />
@@ -772,6 +809,7 @@ export default function BookDetail() {
 
       <ReflectionDialog
         open={showReflect}
+        bookId={book.id}
         bookTitle={book.title}
         initial={book.reflection}
         onClose={() => setShowReflect(false)}
