@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@/contexts/AuthContext";
 import { useTheme, type Theme } from "@/hooks/use-theme";
+import { downloadBackup } from "@/lib/export";
 import { Icon } from "./Icons";
 
 interface Props {
@@ -16,8 +17,20 @@ const THEME_LABELS: Array<{ value: Theme; label: string }> = [
 
 export function UserMenu({ user, onLogout }: Props) {
   const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadBackup();
+    } catch {
+      alert("Gagal bikin backup. Coba lagi.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +70,10 @@ export function UserMenu({ user, onLogout }: Props) {
               </button>
             ))}
           </div>
+          <button className="irm-usermenu__item" onClick={handleExport} disabled={exporting}>
+            <Icon.Pages size={14} />
+            {exporting ? "Preparing backup…" : "Export backup (JSON)"}
+          </button>
           <button className="irm-usermenu__item" onClick={onLogout}>
             <Icon.Logout size={14} />
             Sign out
