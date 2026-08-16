@@ -948,6 +948,8 @@ export default function BookDetail() {
         open={showReflect}
         bookId={book.id}
         bookTitle={book.title}
+        rating={book.rating}
+        onRatingChange={(r) => updateBook(book.id, { rating: r })}
         initial={book.reflection}
         onClose={() => setShowReflect(false)}
         onSave={saveReflection}

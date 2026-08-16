@@ -1205,6 +1205,23 @@ button { font-family: inherit; }
   color: oklch(0.55 0.18 25);
 }
 
+/* Rating + kesan/alasan inside reflection dialog */
+.irm-reflect__rating { gap: 8px; }
+.irm-reflect__rating-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.irm-reflect__rating-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.irm-reflect__rating-val--empty {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
 /* AI draft trigger (reflection dialog + notes section) */
 .irm-ai-draft-btn { white-space: nowrap; flex-shrink: 0; }
 .irm-ai-draft-btn__loading {
