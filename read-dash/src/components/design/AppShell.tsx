@@ -69,12 +69,14 @@ export function AppShell({ onAddBook, children }: Props) {
 
       {children}
 
-      <footer className="irm-footer-wrap">
-        <div className="irm-footer">
-          <span>IrmReads — your private reading journal</span>
-          <span className="irm-mono">v0.4 · prototype</span>
-        </div>
-      </footer>
+      {route !== "graph" && (
+        <footer className="irm-footer-wrap">
+          <div className="irm-footer">
+            <span>IrmReads — your private reading journal</span>
+            <span className="irm-mono">v0.4 · prototype</span>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

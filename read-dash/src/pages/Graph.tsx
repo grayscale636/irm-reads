@@ -51,6 +51,7 @@ export default function Graph() {
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState({ tx: 0, ty: 0, k: 1 });
   const viewInit = useRef(false);
+  const [headerH, setHeaderH] = useState(56);
 
   const simRef = useRef<Simulation<GNode, GLink> | null>(null);
   const nodesRef = useRef<GNode[]>([]);
@@ -65,6 +66,17 @@ export default function Graph() {
       .catch(() => { /* silent */ })
       .finally(() => { if (mounted) setNotesLoaded(true); });
     return () => { mounted = false; };
+  }, []);
+
+  // Keep the full-bleed canvas flush under the sticky app header.
+  useEffect(() => {
+    const measure = () => {
+      const h = document.querySelector(".irm-header")?.getBoundingClientRect().height;
+      if (h) setHeaderH(h);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   // Measure the canvas area.
@@ -316,27 +328,15 @@ export default function Graph() {
   }
 
   return (
-    <div className="irm-main">
-      <div className="irm-page-head">
-        <div>
-          <p className="irm-eyebrow">Graph</p>
-          <h1 className="irm-page-title">Your reading map</h1>
-          <p className="irm-page-sub">
-            Node size shows weight — bigger authors are read more, bigger books hold more notes.
-            Drag to rearrange, scroll to zoom, click a book to open it.
-          </p>
-        </div>
-      </div>
-
-      <div className="irm-graph">
-        <div
-          className="irm-graph__canvas"
-          ref={wrapRef}
-          onPointerDown={onBgPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerLeave={endDrag}
-        >
+    <div className="irm-graph-page" style={{ top: headerH }}>
+      <div
+        className="irm-graph__canvas"
+        ref={wrapRef}
+        onPointerDown={onBgPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerLeave={endDrag}
+      >
           {nodes.length === 0 ? (
             <div className="irm-empty" style={{ height: "100%" }}>
               <div className="irm-empty__text">Nothing to map yet — add books and notes first.</div>
@@ -422,8 +422,10 @@ export default function Graph() {
               <span className="irm-graph__stat-sub irm-mono">{stats.topBookN} notes</span>
             </div>
           </div>
+
+          {/* Interaction hint */}
+          <div className="irm-graph__hint irm-mono">drag · scroll to zoom · click a book to open</div>
         </div>
-      </div>
     </div>
   );
 }
