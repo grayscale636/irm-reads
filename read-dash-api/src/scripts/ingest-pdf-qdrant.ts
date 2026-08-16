@@ -1,8 +1,8 @@
 /**
- * Ingest "***REMOVED***" PDF into Qdrant.
+ * Ingest a book PDF into Qdrant.
  * Uses pdftotext for extraction and @huggingface/transformers for embeddings.
  *
- * Usage: npx ts-node src/scripts/ingest-pdf-qdrant.ts
+ * Usage: BOOK_ID=<id> npx ts-node src/scripts/ingest-pdf-qdrant.ts <path-to-pdf>
  */
 
 import { execSync } from 'child_process';
@@ -12,7 +12,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const COLLECTION = 'book_pages';
-const BOOK_ID = '1779768650106';
+const BOOK_ID = process.env.BOOK_ID || process.argv[3] || '';
 const PDF_PATH = process.argv[2];
 
 interface QdrantPoint {
@@ -93,7 +93,11 @@ function chunkPages(pages: string[]): { page: number; text: string }[] {
 
 async function main() {
   if (!PDF_PATH || !fs.existsSync(PDF_PATH)) {
-    console.error('Usage: npx ts-node src/scripts/ingest-pdf-qdrant.ts <path-to-pdf>');
+    console.error('Usage: BOOK_ID=<id> npx ts-node src/scripts/ingest-pdf-qdrant.ts <path-to-pdf>');
+    process.exit(1);
+  }
+  if (!BOOK_ID) {
+    console.error('Missing BOOK_ID. Set env BOOK_ID=<id> or pass it as the 2nd argument.');
     process.exit(1);
   }
 
@@ -173,7 +177,7 @@ async function main() {
   });
 
   console.log(`\n✅ DONE! ${points.length} chunks in Qdrant`);
-  console.log(`   Book: ***REMOVED*** (ID: ${BOOK_ID})`);
+  console.log(`   Book ID: ${BOOK_ID}`);
   console.log(`   Collection: ${COLLECTION}`);
 }
 

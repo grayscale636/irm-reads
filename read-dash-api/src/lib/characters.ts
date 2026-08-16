@@ -2,8 +2,19 @@
  * Extract probable character names from a text chunk using lightweight heuristics.
  * Conservative approach: only extracts names that are likely actual characters,
  * not generic capitalized words.
+ *
+ * NOTE: Book-specific blocklists (proper nouns, place names, and noise words tuned
+ * to a particular text) are deliberately NOT stored in source. They are loaded at
+ * runtime from an optional, git-ignored data file so this repository stays free of
+ * copyrighted character/place names. See data/character-blacklist.example.json for
+ * the expected shape. When the file is absent, extraction still works — it is just
+ * noisier.
  */
 
+import fs from 'fs';
+import path from 'path';
+
+// Generic Indonesian honorifics — used to detect "Title + Name" patterns.
 const TITLE_WORDS = new Set([
   'Sang','Mama','Papa','Tuan','Nyai','Nona','Nyonya','Ibu','Bapak','Pak','Bu',
   'Kamerad','Komandan','Kapten','Letnan','Sersan','Jenderal','Dokter','Haji',
@@ -11,6 +22,7 @@ const TITLE_WORDS = new Set([
   'Mayor','Kolonel','Suster','Tante','Oma','Nenek','Kakek','Nona','Mister',
 ]);
 
+// Generic Indonesian sentence-transition words — stripped from name candidates.
 const TRANSITION_WORDS = new Set([
   'Tapi','Namun','Meskipun','Sementara','Kemudian','Kenyataannya','Ketika',
   'Bahkan','Bagaimanapun','Lalu','Akhirnya','Maka','Jika','Rupanya','Sejenak',
@@ -22,95 +34,38 @@ const TRANSITION_WORDS = new Set([
   'Selain','Kedua','Ternyata','Segera','Tiba','Kembali','Pernah',
 ]);
 
-const NON_CHARACTERS = new Set([
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','Jakarta','Bandung','Yogyakarta','Surabaya','Semarang',
-  '***REMOVED***','***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','Kehidupan',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***',
-  '***REMOVED***','***REMOVED***','***REMOVED***',
-]);
+/**
+ * Optional, git-ignored blocklists tuned to a specific book.
+ * Shape: { "nonCharacters": string[], "singleNameBlacklist": string[] }
+ *   - nonCharacters: exact phrases that are never characters (places, titles, orgs)
+ *   - singleNameBlacklist: single capitalized words to reject as noise
+ * Absent/invalid file → empty sets. Override the path with CHARACTER_BLACKLIST_PATH.
+ */
+function loadBlacklists(): {
+  nonCharacters: Set<string>;
+  singleNameBlacklist: Set<string>;
+} {
+  const candidates = [
+    process.env.CHARACTER_BLACKLIST_PATH,
+    path.join(__dirname, '..', '..', 'data', 'character-blacklist.local.json'),
+  ].filter(Boolean) as string[];
 
-const SINGLE_NAME_BLACKLIST = new Set([
-  'Kehidupan','Seorang','Semuanya','Orang','Bahkan','Katakan','Mencoba',
-  'Gadis','Tuhan','Segala','Seharusnya','Seseorang','Sebuah','Bagaimanapun',
-  'Sebagaimana','Perempuan','Beberapa','Sekali','Seandainya','Sebab',
-  'Demikianlah','Tentu','Setiap','Kematian','Delapan','Sampai','Padahal',
-  'Terutama','Mungkin','Lelaki','Waktu','Meskipun','Paling','Benar',
-  'Suatu','Awalnya','Bagaikan','Menanti','Pernah','Berapa','Sangat',
-  'Sebentar','Sambil','Selama','Banyak','Kenapa','Apakah','Mengapa',
-  'Lihat','Seketika','Hingga','Begitulah','Memang','Kelak','Bapak',
-  'Tahukah','Cinta','Teman','Kadang','Lebih','Betapa','Seolah',
-  'Semua','Kecuali','Sayang','Sepanjang','Sebaliknya','Bukan',
-  'Keduanya','Daripada','Ramalan','Tenanglah','Pulau','Akhirnya',
-  'Kemudian','Segalanya','Kalian','Nyonya','Jangan','Berbuatlah',
-  'Bukankah','Pikirkanlah','Lakukanlah','Sekarang','Tampaknya',
-  'Bagaimana','Kenyataannya','Baiklah','Masalahnya','Selepas',
-  'Jelas','Keadaan','Penduduk','Kepada','Kurang','Selebihnya',
-  'Sesungguhnya','Lagipula','Beginilah','Baginya','Siapakah',
-  'Ternyata','Kapan','Jumlah','Berita','Pertama','Kembali',
-  'Marxis','Itulah','Penerbit','Pustaka','Utama','Indonesia',
-  'Malaysia','***REMOVED***','Desain','Anggota','Diterbitkan',
-  'Cetakan','Undang','Dilarang','Dicetak','Percetakan','Media',
-  'Membaca','Inilah','Lewat','Harapan','Minggu','Sejarah',
-  'Budaya','Perihal','Koran','Pelanggaran','Pasal','Nomor',
-  'Cipta','Barangsiapa','Semuanya','Kehidupan',
-  // Additional noise words
-  'Ibunya','Tubuhnya','Tangannya','Wajahnya','Rambutnya',
-  'Prajurit','Komunis','Percayalah','Bertahun','Tahukah',
-  'Duduk','Hampir','Sesuatu','Wajah','Tempat','Entah',
-  'Konon','Perwira','Perang','Bocah','Nasib','Serangan',
-  'Pasukan','Pemuda','Ayahnya','Hubungannya','Hidupnya',
-  'Baginya','Wajahnya','Rumahnya','Rombongan','Jabatan',
-  'Surat','Ternyata','Pintu','Kemunculan','Bendera',
-  'Akhir','Mayat','Sambutan','Pahlawan','Pakaian',
-  'Umurnya','Merasa','Pertama','Musik','Pemandangan',
-  'Percakapan','Jenis','Tokoh','Pemerintah','Surga',
-  'Tepat','Cerita','Darahnya','Salah','Penampilan',
-  'Kesadaran','Pakaiannya','Udara','Siang','Setengah',
-  'Selamat','Mendengar','Sejauh','Semakin','Segera',
-  'Terakhir','Rupanya','Percaya','Senja','Dokter',
-  'Cukup','Kepala','Peristiwa','Jadilah','Pertanyaan',
-  'Aktivitas','Propaganda','Sumber','Tolong','Termasuk',
-  'Revolusi','Jawaban','Laporan','Poster','Markas',
-  'Pemimpin','Pihak','Melakukan','Ratusan','Tengah',
-  'Kisah','Menjelang','Ucapan','Kemarahan','Besok',
-  'Pukul','Demikian','Mulai','Tangisan','Lahir',
-  'Nasional','Menangis','Jatuh','Dengarkan','Kesehatan',
-  'Bentuk','Rambut','Anakku','Paman','Kuburan','Nenek',
-  'Kekasih','Pengakuan','Bodoh','Ganti','Siksaan',
-  'Tunggu','Perlahan','Kemeja','Tanya','Terminal',
-  'Pengunjung','Bunuh','Operasi','Harapannya','Menghilang',
-  'Keempat','Kesepian','Makhluk','Sosok','Pisau','Boleh',
-  'Menarik','Kencan','Kakak','Ketakutan','Boneka',
-  'Memanggil','Bersetubuh','Mencintai',
-  // The real noise
-  '***REMOVED***',
-]);
+  for (const file of candidates) {
+    try {
+      const json = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      return {
+        nonCharacters: new Set<string>(json.nonCharacters || []),
+        singleNameBlacklist: new Set<string>(json.singleNameBlacklist || []),
+      };
+    } catch {
+      // Try the next candidate; missing file is expected and fine.
+    }
+  }
+  return { nonCharacters: new Set(), singleNameBlacklist: new Set() };
+}
+
+const { nonCharacters: NON_CHARACTERS, singleNameBlacklist: SINGLE_NAME_BLACKLIST } =
+  loadBlacklists();
 
 /**
  * Clean a name candidate: strip trailing period, check transitions, filter noise.
@@ -137,8 +92,7 @@ function clean(raw: string): string | null {
 export function extractCharacterNames(text: string): string[] {
   const candidates = new Set<string>();
 
-  // Strategy 1: Title + Name — highest confidence
-  // "***REMOVED***won", "***REMOVED***cho", "Mama ***REMOVED***"
+  // Strategy 1: Title + Name — highest confidence (honorific followed by a name)
   const titleRE = new RegExp(
     `(?:${[...TITLE_WORDS].join('|')})\\s+[A-Z][a-zéèêëàâäîïôöûüç]+`,
     'g'
@@ -157,9 +111,8 @@ export function extractCharacterNames(text: string): string[] {
     }
   }
 
-  // Strategy 2: Multi-word capitalized names (2-3 words) — medium confidence
-  // "***REMOVED***", "***REMOVED***deng", "***REMOVED***"
-  // But NOT if first word is a common sentence-start word
+  // Strategy 2: Multi-word capitalized names (2-3 words) — medium confidence.
+  // But NOT if first word is a common sentence-start word.
   const multiRE = /[A-Z][a-zéèêëàâäîïôöûüç]{2,}(?:\s[A-Z][a-zéèêëàâäîïôöûüç]+){1,2}/g;
   const multi = text.match(multiRE);
   if (multi) {
@@ -199,13 +152,12 @@ export function mergeCharacterNames(lists: string[][]): Map<string, number> {
     }
   }
 
-  // Remove names that are substrings of longer names
-  // e.g., "***REMOVED***" (if present) and "***REMOVED***cho" → keep only "***REMOVED***cho"
+  // Remove single-word names that are substrings of longer names,
+  // e.g. keep only the fuller "Title + Name" form when both are present.
   const allNames = [...filtered.keys()];
   for (const name of allNames) {
     const words = name.split(/\s+/);
     if (words.length === 1) {
-      // Check if there's a longer version that includes this name
       const hasLonger = allNames.some(
         other => other !== name && other.includes(name) && other.split(/\s+/).length > 1
       );

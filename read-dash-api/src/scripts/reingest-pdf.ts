@@ -1,8 +1,8 @@
 /**
- * Re-ingest "***REMOVED***" PDF into Qdrant using OpenRouter embeddings.
- * 
- * Usage: npx ts-node src/scripts/reingest-pdf.ts
- * 
+ * Re-ingest a book PDF into Qdrant using OpenRouter embeddings.
+ *
+ * Usage: BOOK_ID=<id> npx ts-node src/scripts/reingest-pdf.ts <path-to-pdf>
+ *
  * Deletes old collection, creates new one with 1536-dim vectors, ingests all.
  */
 
@@ -12,7 +12,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { embedBatch, getCollectionConfig } from '../lib/qdrant';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-const BOOK_ID = '1779768650106';
+const BOOK_ID = process.env.BOOK_ID || process.argv[3] || '';
 const PDF_PATH = process.argv[2];
 
 interface QdrantPoint {
@@ -28,7 +28,11 @@ interface QdrantPoint {
 
 async function main() {
   if (!PDF_PATH || !fs.existsSync(PDF_PATH)) {
-    console.error('Usage: npx ts-node src/scripts/reingest-pdf.ts <path-to-pdf>');
+    console.error('Usage: BOOK_ID=<id> npx ts-node src/scripts/reingest-pdf.ts <path-to-pdf>');
+    process.exit(1);
+  }
+  if (!BOOK_ID) {
+    console.error('Missing BOOK_ID. Set env BOOK_ID=<id> or pass it as the 2nd argument.');
     process.exit(1);
   }
 

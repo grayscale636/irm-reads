@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy this to character-blacklist.local.json and fill with blocklists tuned to your book. This file is optional; when absent, character extraction still runs (just noisier). The .local.json variant is git-ignored so book-specific proper nouns never enter version control. You can also point CHARACTER_BLACKLIST_PATH at any path.",
+  "nonCharacters": [
+    "Some Publisher Name",
+    "Some Place Name"
+  ],
+  "singleNameBlacklist": [
+    "Kata",
+    "Umum"
+  ]
+}
