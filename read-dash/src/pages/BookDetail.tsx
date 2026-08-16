@@ -11,6 +11,7 @@ import { useCollapsible } from "@/hooks/use-collapsible";
 import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, normalizeQuote, type BookNote, type NoteType, type QuoteItem } from "@/lib/api";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
+import { downloadBookMarkdown } from "@/lib/export";
 import ReactMarkdown from "react-markdown";
 
 const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
@@ -396,6 +397,15 @@ export default function BookDetail() {
             <div className="irm-detail__metaitem">
               <button className="irm-btn irm-btn--ghost" onClick={() => setShowAI((v) => !v)}>
                 💬 Bacain
+              </button>
+            </div>
+            <div className="irm-detail__metaitem">
+              <button
+                className="irm-btn irm-btn--ghost"
+                onClick={() => downloadBookMarkdown(book, notes, bookLogs)}
+                title="Download this book's notes, quotes & reflection as Markdown"
+              >
+                <Icon.Pages size={13} /> Export Markdown
               </button>
             </div>
             <div className="irm-detail__metaitem">
