@@ -1,16 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBooks } from "@/contexts/BooksContext";
-import { getAllNotes, type JournalNote } from "@/lib/api";
+import { getAllNotes, type JournalNote, type NoteType } from "@/lib/api";
 import { Icon } from "@/components/design/Icons";
 
 type Filter = "all" | "notes" | "quotes";
 
 const PAGE_SIZE = 50;
 
+const NOTE_LABEL: Record<NoteType, string> = {
+  note: "Note",
+  reflection: "Reflection",
+  question: "Question",
+};
+
 interface Entry {
   key: string;
   type: "note" | "quote";
+  /** For notes, the specific note_type; drives the pill label & color. */
+  noteType?: NoteType;
+  pageRef?: number | null;
+  tags?: string[];
   bookId: string;
   bookTitle: string;
   bookAuthor: string;
@@ -66,6 +76,9 @@ export default function Journal() {
       list.push({
         key: `n-${n.id}`,
         type: "note",
+        noteType: n.noteType || "note",
+        pageRef: n.pageRef,
+        tags: n.tags,
         bookId: n.bookId,
         bookTitle: n.bookTitle,
         bookAuthor: n.bookAuthor,
@@ -123,7 +136,8 @@ export default function Journal() {
         (e) =>
           e.text.toLowerCase().includes(q) ||
           e.bookTitle.toLowerCase().includes(q) ||
-          e.bookAuthor.toLowerCase().includes(q),
+          e.bookAuthor.toLowerCase().includes(q) ||
+          (e.tags || []).some((t) => t.toLowerCase().includes(q)),
       );
     }
     return list;
@@ -203,7 +217,9 @@ export default function Journal() {
           {filtered.slice(0, visibleCount).map((e) => (
             <li key={e.key} className={`irm-journal__item irm-journal__item--${e.type}`}>
               <div className="irm-journal__head">
-                <span className={`irm-pill irm-pill--${e.type}`}>{e.type === "note" ? "Note" : "Quote"}</span>
+                <span className={`irm-pill irm-pill--${e.type === "note" ? e.noteType : "quote"}`}>
+                  {e.type === "note" ? NOTE_LABEL[e.noteType || "note"] : "Quote"}
+                </span>
                 <button
                   type="button"
                   className="irm-journal__book"
@@ -213,6 +229,9 @@ export default function Journal() {
                   <span className="irm-journal__book-title">{e.bookTitle}</span>
                   <span className="irm-journal__book-author">{e.bookAuthor}</span>
                 </button>
+                {e.pageRef ? (
+                  <span className="irm-journal__page irm-mono">p.{e.pageRef}</span>
+                ) : null}
                 {e.date && (
                   <span className="irm-journal__date irm-mono">
                     {new Date(e.date).toLocaleDateString("en-US", {
@@ -227,6 +246,13 @@ export default function Journal() {
                 {e.type === "quote" && <span className="irm-journal__quotemark">"</span>}
                 {e.text}
               </p>
+              {e.tags && e.tags.length > 0 && (
+                <div className="irm-note__tags">
+                  {e.tags.map((tag) => (
+                    <span key={tag} className="irm-tag">#{tag}</span>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
