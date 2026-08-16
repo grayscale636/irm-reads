@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "./Icons";
+import { StarRating } from "./StarRating";
 import { generateAIDraft } from "@/lib/api";
 
 /**
@@ -18,60 +19,106 @@ const PROMPTS: Array<{ heading: string; label: string; placeholder: string }> = 
     label: "Bakal kamu rekomendasiin ke siapa? Kenapa?",
     placeholder: "Cocok buat orang yang…",
   },
-  {
-    heading: "Alasan rating",
-    label: "Rating jujurmu — apa alasannya?",
-    placeholder: "Kenapa segitu, bukan lebih / kurang…",
-  },
 ];
 
+const RATING_HEADING = "Alasan rating";
+const KESAN_PREFIX = "Kesan:";
+const ALASAN_PREFIX = "Alasan:";
+
+interface ParsedReflection {
+  answers: string[];
+  kesan: string;
+  alasan: string;
+}
+
 // Build markdown from the per-prompt answers, skipping empty ones.
-function buildReflection(answers: string[]): string {
-  return PROMPTS.map((p, i) => [p.heading, answers[i]?.trim()])
+function buildReflection(answers: string[], kesan: string, alasan: string): string {
+  const parts = PROMPTS.map((p, i) => [p.heading, answers[i]?.trim()])
     .filter(([, a]) => a)
-    .map(([heading, a]) => `**${heading}**\n${a}`)
-    .join("\n\n");
+    .map(([heading, a]) => `**${heading}**\n${a}`);
+
+  const ratingLines: string[] = [];
+  if (kesan.trim()) ratingLines.push(`${KESAN_PREFIX} ${kesan.trim().replace(/\s*\n+\s*/g, " ")}`);
+  if (alasan.trim()) ratingLines.push(`${ALASAN_PREFIX} ${alasan.trim().replace(/\s*\n+\s*/g, " ")}`);
+  if (ratingLines.length) parts.push(`**${RATING_HEADING}**\n${ratingLines.join("\n")}`);
+
+  return parts.join("\n\n");
+}
+
+function grabSection(text: string, heading: string): string {
+  const esc = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`\\*\\*${esc}\\*\\*\\s*\\n([\\s\\S]*?)(?=\\n\\*\\*|$)`);
+  return (text.match(re)?.[1] ?? "").trim();
 }
 
 // Best-effort parse of a saved reflection back into per-prompt answers. If the
 // text has no recognizable headings (e.g. free-form or legacy), it all lands
 // in the first field so nothing is lost.
-function parseReflection(text: string): string[] {
+function parseReflection(text: string): ParsedReflection {
   const answers = PROMPTS.map(() => "");
-  if (!text?.trim()) return answers;
+  let kesan = "";
+  let alasan = "";
+  if (!text?.trim()) return { answers, kesan, alasan };
 
   let matchedAny = false;
-  for (let i = 0; i < PROMPTS.length; i++) {
-    const heading = PROMPTS[i].heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`\\*\\*${heading}\\*\\*\\s*\\n([\\s\\S]*?)(?=\\n\\*\\*|$)`);
-    const m = text.match(re);
-    if (m) {
-      answers[i] = m[1].trim();
+  PROMPTS.forEach((p, i) => {
+    const v = grabSection(text, p.heading);
+    if (v) {
+      answers[i] = v;
       matchedAny = true;
     }
+  });
+
+  // "Alasan rating" holds "Kesan:" and "Alasan:" lines, or legacy free-form text.
+  const ratingBlock = grabSection(text, RATING_HEADING);
+  if (ratingBlock) {
+    matchedAny = true;
+    for (const line of ratingBlock.split("\n")) {
+      if (line.startsWith(KESAN_PREFIX)) kesan = line.slice(KESAN_PREFIX.length).trim();
+      else if (line.startsWith(ALASAN_PREFIX)) alasan = line.slice(ALASAN_PREFIX.length).trim();
+    }
+    // Legacy free-form reflection → keep it as the reason.
+    if (!kesan && !alasan) alasan = ratingBlock;
   }
+
   if (!matchedAny) answers[0] = text.trim();
-  return answers;
+  return { answers, kesan, alasan };
 }
 
 interface Props {
   open: boolean;
   bookId: string;
   bookTitle: string;
+  rating: number;
+  onRatingChange: (rating: number) => void | Promise<void>;
   initial?: string;
   onClose: () => void;
   onSave: (reflection: string) => void | Promise<void>;
 }
 
-export function ReflectionDialog({ open, bookId, bookTitle, initial, onClose, onSave }: Props) {
+export function ReflectionDialog({
+  open,
+  bookId,
+  bookTitle,
+  rating,
+  onRatingChange,
+  initial,
+  onClose,
+  onSave,
+}: Props) {
   const [answers, setAnswers] = useState<string[]>(PROMPTS.map(() => ""));
+  const [kesan, setKesan] = useState("");
+  const [alasan, setAlasan] = useState("");
   const [saving, setSaving] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setAnswers(parseReflection(initial || ""));
+      const parsed = parseReflection(initial || "");
+      setAnswers(parsed.answers);
+      setKesan(parsed.kesan);
+      setAlasan(parsed.alasan);
       setSaving(false);
       setDrafting(false);
       setError("");
@@ -80,14 +127,17 @@ export function ReflectionDialog({ open, bookId, bookTitle, initial, onClose, on
 
   if (!open) return null;
 
-  const hasContent = answers.some((a) => a.trim());
+  const hasContent = answers.some((a) => a.trim()) || kesan.trim() || alasan.trim();
 
   const handleDraft = async () => {
     setDrafting(true);
     setError("");
     try {
       const draft = await generateAIDraft(bookId, "reflection");
-      setAnswers(parseReflection(draft));
+      const parsed = parseReflection(draft);
+      setAnswers(parsed.answers);
+      setKesan(parsed.kesan);
+      setAlasan(parsed.alasan);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal bikin draft.");
     } finally {
@@ -98,7 +148,7 @@ export function ReflectionDialog({ open, bookId, bookTitle, initial, onClose, on
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(buildReflection(answers));
+      await onSave(buildReflection(answers, kesan, alasan));
       onClose();
     } finally {
       setSaving(false);
@@ -154,6 +204,34 @@ export function ReflectionDialog({ open, bookId, bookTitle, initial, onClose, on
               />
             </label>
           ))}
+
+          <div className="irm-field irm-reflect__rating">
+            <span className="irm-field__label">Rating jujurmu</span>
+            <div className="irm-reflect__rating-row">
+              <StarRating value={rating} onChange={onRatingChange} />
+              {rating > 0 ? (
+                <span className="irm-reflect__rating-val">{rating}/5</span>
+              ) : (
+                <span className="irm-reflect__rating-val irm-reflect__rating-val--empty">
+                  belum dirating
+                </span>
+              )}
+            </div>
+            <span className="irm-field__label">Kesan</span>
+            <input
+              className="irm-input"
+              value={kesan}
+              placeholder="Kesan keseluruhan soal buku ini…"
+              onChange={(e) => setKesan(e.target.value)}
+            />
+            <span className="irm-field__label">Alasan</span>
+            <input
+              className="irm-input"
+              value={alasan}
+              placeholder="Kenapa segitu, bukan lebih / kurang…"
+              onChange={(e) => setAlasan(e.target.value)}
+            />
+          </div>
         </div>
         <div className="irm-dialog__foot">
           <button className="irm-btn irm-btn--ghost" onClick={onClose}>
