@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/use-theme";
@@ -9,6 +10,9 @@ import BookDetail from "./pages/BookDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+
+// Lazy — pulls in d3-force only when the graph is opened.
+const Graph = lazy(() => import("./pages/Graph"));
 
 function Loader() {
   return (
@@ -52,6 +56,7 @@ function AppRoutes() {
         <Route path="/" element={<Library />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/journal" element={<Journal />} />
+        <Route path="/graph" element={<Suspense fallback={<Loader />}><Graph /></Suspense>} />
         <Route path="/book/:id" element={<BookDetail />} />
       </Route>
 
