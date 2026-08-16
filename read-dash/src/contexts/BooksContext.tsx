@@ -8,7 +8,8 @@ import {
   addReadingLog as apiAddReadingLog,
   deleteReadingLog as apiDeleteReadingLog,
   Book,
-  ReadingLog
+  ReadingLog,
+  QuoteItem
 } from "@/lib/api";
 
 export interface BookData {
@@ -24,7 +25,7 @@ export interface BookData {
   reflection?: string;
   startedAt?: string;
   finishedAt?: string;
-  quotes?: string[];
+  quotes?: (string | QuoteItem)[];
 }
 
 export interface ReadingLogData {

@@ -8,7 +8,7 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, type BookNote, type NoteType } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, normalizeQuote, type BookNote, type NoteType, type QuoteItem } from "@/lib/api";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import ReactMarkdown from "react-markdown";
@@ -89,6 +89,12 @@ export default function BookDetail() {
   const [editTags, setEditTags] = useState("");
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
+  const [quotePage, setQuotePage] = useState("");
+  const [quoteTags, setQuoteTags] = useState("");
+  const [editingQuoteIdx, setEditingQuoteIdx] = useState<number | null>(null);
+  const [editQuoteText, setEditQuoteText] = useState("");
+  const [editQuotePage, setEditQuotePage] = useState("");
+  const [editQuoteTags, setEditQuoteTags] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [showReflect, setShowReflect] = useState(false);
   const [recapLoading, setRecapLoading] = useState(false);
@@ -146,7 +152,7 @@ export default function BookDetail() {
     .filter((l) => l.bookId === book.id)
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date));
-  const quotes: string[] = Array.isArray(book.quotes)
+  const rawQuotes: (string | QuoteItem)[] = Array.isArray(book.quotes)
     ? book.quotes
     : typeof book.quotes === "string"
     ? (() => {
@@ -158,6 +164,7 @@ export default function BookDetail() {
         }
       })()
     : [];
+  const quotes: QuoteItem[] = rawQuotes.map(normalizeQuote);
 
   const savePages = async () => {
     const n = Math.max(0, Math.min(book.totalPages, parseInt(pagesInput, 10) || 0));
@@ -269,12 +276,54 @@ export default function BookDetail() {
     await updateBook(book.id, { reflection });
   };
 
+  const openQuoteForm = () => {
+    setQuotePage(book.pagesRead ? String(book.pagesRead) : "");
+    setQuoteTags("");
+    setShowQuoteForm(true);
+  };
+
   const addQuote = async () => {
     const text = quoteInput.trim();
     if (!text) return;
-    await updateBook(book.id, { quotes: [...quotes, text] });
+    const item: QuoteItem = {
+      text,
+      date: today,
+      ...(quotePage ? { page: parseInt(quotePage, 10) } : {}),
+      ...(parseTags(quoteTags).length ? { tags: parseTags(quoteTags) } : {}),
+    };
+    // Writing the normalized array also upgrades any legacy string quotes.
+    await updateBook(book.id, { quotes: [...quotes, item] });
     setQuoteInput("");
+    setQuoteTags("");
     setShowQuoteForm(false);
+  };
+
+  const startEditQuote = (index: number) => {
+    const q = quotes[index];
+    setEditingQuoteIdx(index);
+    setEditQuoteText(q.text);
+    setEditQuotePage(q.page ? String(q.page) : "");
+    setEditQuoteTags((q.tags || []).join(", "));
+  };
+
+  const cancelEditQuote = () => {
+    setEditingQuoteIdx(null);
+    setEditQuoteText("");
+  };
+
+  const saveEditQuote = async () => {
+    if (editingQuoteIdx === null || !editQuoteText.trim()) return;
+    const prev = quotes[editingQuoteIdx];
+    const tags = parseTags(editQuoteTags);
+    const updated: QuoteItem = {
+      text: editQuoteText.trim(),
+      ...(prev.date ? { date: prev.date } : {}),
+      ...(editQuotePage ? { page: parseInt(editQuotePage, 10) } : {}),
+      ...(tags.length ? { tags } : {}),
+    };
+    const next = quotes.map((q, i) => (i === editingQuoteIdx ? updated : q));
+    await updateBook(book.id, { quotes: next });
+    cancelEditQuote();
   };
 
   const deleteQuote = async (index: number) => {
@@ -674,7 +723,7 @@ export default function BookDetail() {
               onToggle={quotesColl.toggle}
               action={
                 !showQuoteForm && quotesColl.open && (
-                  <button className="irm-btn irm-btn--ghost" onClick={() => setShowQuoteForm(true)}>
+                  <button className="irm-btn irm-btn--ghost" onClick={openQuoteForm}>
                     <Icon.Plus size={13} /> Add
                   </button>
                 )
@@ -690,11 +739,32 @@ export default function BookDetail() {
                   placeholder="Type or paste a quote…"
                   autoFocus
                 />
+                <div className="irm-note__form-meta irm-note__form-meta--quote">
+                  <input
+                    type="number"
+                    className="irm-input irm-mono"
+                    value={quotePage}
+                    min={0}
+                    max={book.totalPages || undefined}
+                    placeholder="Page"
+                    onChange={(e) => setQuotePage(e.target.value)}
+                    title="Page reference"
+                  />
+                  <input
+                    type="text"
+                    className="irm-input"
+                    value={quoteTags}
+                    placeholder="Tags (comma separated)"
+                    onChange={(e) => setQuoteTags(e.target.value)}
+                    title="Tags"
+                  />
+                </div>
                 <div className="irm-reflect__actions">
                   <button
                     className="irm-btn irm-btn--ghost"
                     onClick={() => {
                       setQuoteInput("");
+                      setQuoteTags("");
                       setShowQuoteForm(false);
                     }}
                   >
@@ -719,12 +789,69 @@ export default function BookDetail() {
                 {quotes.map((q, idx) => (
                   <li key={idx} className="irm-quote">
                     <div className="irm-quote__mark">"</div>
-                    <div className="irm-quote__body">
-                      <p className="irm-quote__text">{q}</p>
-                    </div>
-                    <button className="irm-logitem__delete" onClick={() => deleteQuote(idx)}>
-                      <Icon.Trash size={14} />
-                    </button>
+                    {editingQuoteIdx === idx ? (
+                      <div className="irm-quote__body">
+                        <div className="irm-reflect__edit">
+                          <textarea
+                            className="irm-input irm-textarea"
+                            rows={3}
+                            value={editQuoteText}
+                            onChange={(e) => setEditQuoteText(e.target.value)}
+                            autoFocus
+                          />
+                          <div className="irm-note__form-meta irm-note__form-meta--quote">
+                            <input
+                              type="number"
+                              className="irm-input irm-mono"
+                              value={editQuotePage}
+                              min={0}
+                              placeholder="Page"
+                              onChange={(e) => setEditQuotePage(e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              className="irm-input"
+                              value={editQuoteTags}
+                              placeholder="Tags (comma separated)"
+                              onChange={(e) => setEditQuoteTags(e.target.value)}
+                            />
+                          </div>
+                          <div className="irm-reflect__actions">
+                            <button className="irm-btn irm-btn--ghost" onClick={cancelEditQuote}>Cancel</button>
+                            <button className="irm-btn irm-btn--primary" disabled={!editQuoteText.trim()} onClick={saveEditQuote}>
+                              <Icon.Check size={13} /> Save
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="irm-quote__body">
+                        <p className="irm-quote__text">{q.text}</p>
+                        {(q.page || q.date || (q.tags && q.tags.length > 0)) && (
+                          <div className="irm-quote__meta">
+                            {q.page ? <span className="irm-note__page irm-mono">p.{q.page}</span> : null}
+                            {q.date && (
+                              <span className="irm-quote__date irm-mono">
+                                {new Date(q.date).toLocaleDateString("en-ID", { month: "short", day: "numeric", year: "numeric" })}
+                              </span>
+                            )}
+                            {q.tags && q.tags.map((tag) => (
+                              <span key={tag} className="irm-tag">#{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {editingQuoteIdx !== idx && (
+                      <div className="irm-note__actions">
+                        <button className="irm-logitem__delete" onClick={() => startEditQuote(idx)}>
+                          <Icon.Edit size={13} />
+                        </button>
+                        <button className="irm-logitem__delete" onClick={() => deleteQuote(idx)}>
+                          <Icon.Trash size={14} />
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -2074,6 +2074,19 @@ button { font-family: inherit; }
 }
 .irm-quote .irm-logitem__delete { align-self: flex-start; opacity: 0; }
 .irm-quote:hover .irm-logitem__delete { opacity: 1; }
+.irm-quote .irm-note__actions { align-self: flex-start; }
+.irm-quote__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.irm-quote__date { font-size: 11px; color: var(--ink-muted); }
+.irm-note__form-meta--quote { grid-template-columns: minmax(0, 90px) minmax(0, 1fr); }
+@media (max-width: 560px) {
+  .irm-note__form-meta--quote { grid-template-columns: 1fr 1fr; }
+}
 
 /* ── Collapsible section ───────────────────────── */
 .irm-section-head--clickable {

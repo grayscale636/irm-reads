@@ -11,6 +11,23 @@ function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
+/**
+ * A saved quote. Historically quotes were plain strings; they are now objects
+ * carrying date/page/tags. Both shapes may coexist in storage, so always read
+ * through `normalizeQuote`.
+ */
+export interface QuoteItem {
+  text: string;
+  /** ISO date the quote was saved. Absent on legacy string quotes. */
+  date?: string;
+  page?: number;
+  tags?: string[];
+}
+
+export function normalizeQuote(q: string | QuoteItem): QuoteItem {
+  return typeof q === 'string' ? { text: q } : q;
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -24,7 +41,7 @@ export interface Book {
   reflection?: string;
   startedAt?: string;
   finishedAt?: string;
-  quotes?: string[];
+  quotes?: (string | QuoteItem)[];
 }
 
 export interface ReadingLog {

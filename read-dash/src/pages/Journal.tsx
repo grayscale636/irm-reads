@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBooks } from "@/contexts/BooksContext";
-import { getAllNotes, type JournalNote, type NoteType } from "@/lib/api";
+import { getAllNotes, normalizeQuote, type JournalNote, type NoteType } from "@/lib/api";
 import { Icon } from "@/components/design/Icons";
 
 type Filter = "all" | "notes" | "quotes";
@@ -89,15 +89,19 @@ export default function Journal() {
 
     for (const book of books) {
       const quotes = Array.isArray(book.quotes) ? book.quotes : [];
-      quotes.forEach((q, idx) => {
-        if (!q || !q.trim()) return;
+      quotes.forEach((raw, idx) => {
+        const q = normalizeQuote(raw);
+        if (!q.text || !q.text.trim()) return;
         list.push({
           key: `q-${book.id}-${idx}`,
           type: "quote",
+          pageRef: q.page,
+          tags: q.tags,
           bookId: book.id,
           bookTitle: book.title,
           bookAuthor: book.author,
-          text: q,
+          text: q.text,
+          date: q.date,
         });
       });
     }
