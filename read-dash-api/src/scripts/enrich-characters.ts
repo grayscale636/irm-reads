@@ -4,7 +4,7 @@
  * Scans all chunks for the book, extracts names, updates payload.
  * Run this ONCE — it won't re-embed anything.
  *
- * Usage: npx ts-node src/scripts/enrich-characters.ts
+ * Usage: BOOK_ID=<id> npx ts-node src/scripts/enrich-characters.ts
  */
 
 import { QdrantClient } from '@qdrant/js-client-rest';
@@ -12,9 +12,13 @@ import { extractCharacterNames, mergeCharacterNames } from '../lib/characters';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const COLLECTION = 'book_pages';
-const BOOK_ID = '1779768650106';
+const BOOK_ID = process.env.BOOK_ID || process.argv[2] || '';
 
 async function main() {
+  if (!BOOK_ID) {
+    console.error('Missing BOOK_ID. Set env BOOK_ID=<id> or pass it as the 1st argument.');
+    process.exit(1);
+  }
   const qdrant = new QdrantClient({ url: QDRANT_URL });
 
   // 1. Scroll all points for this book — WITH vectors so we can re-upsert

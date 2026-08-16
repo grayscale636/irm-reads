@@ -9,6 +9,9 @@ dist/
 .env.local
 .env.production
 
+# Book-specific data (character blocklists tuned to a copyrighted text)
+data/*.local.json
+
 # Logs
 logs/
 *.log
