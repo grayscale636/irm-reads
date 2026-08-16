@@ -18,9 +18,11 @@ export function AppShell({ onAddBook, children }: Props) {
     ? "dashboard"
     : location.pathname.startsWith("/journal")
       ? "journal"
-      : location.pathname.startsWith("/book")
-        ? "book"
-        : "library";
+      : location.pathname.startsWith("/graph")
+        ? "graph"
+        : location.pathname.startsWith("/book")
+          ? "book"
+          : "library";
 
   return (
     <div className="irm-app">
@@ -48,6 +50,12 @@ export function AppShell({ onAddBook, children }: Props) {
               onClick={() => navigate("/journal")}
             >
               Journal
+            </button>
+            <button
+              className={`irm-nav__item ${route === "graph" ? "is-active" : ""}`}
+              onClick={() => navigate("/graph")}
+            >
+              Graph
             </button>
           </nav>
           <div className="irm-header__right">
