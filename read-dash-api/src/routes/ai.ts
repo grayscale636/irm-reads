@@ -294,4 +294,186 @@ Kamu adalah "pengingat cerita". Kalau pembaca lupa "siapa tokoh ini?" atau "apa 
   }
 });
 
+/**
+ * POST /api/ai/generate
+ * Body: { bookId: string, mode: 'recap' | 'reflection' }
+ *
+ * One-shot draft generator (NOT saved to chat history). Uses the same
+ * spoiler-safe RAG context + reader notes as /discuss, but returns a draft the
+ * reader can edit:
+ *   - recap:      concise chronological recap of what's happened so far.
+ *   - reflection: a first-person reflection draft synthesized from the reader's
+ *                 notes + reading, structured to match the reflection prompts.
+ */
+router.post('/generate', async (req: AuthRequest, res: Response) => {
+  try {
+    const { bookId, mode } = req.body;
+    if (!bookId || (mode !== 'recap' && mode !== 'reflection')) {
+      res.status(400).json({ error: "bookId and a valid mode ('recap'|'reflection') are required" });
+      return;
+    }
+
+    // 1. Fetch book
+    const bookResult = await pool.query(`
+      SELECT id, title, author, status, pages_read, total_pages, rating
+      FROM books WHERE id = $1 AND user_id = $2
+    `, [bookId, req.userId]);
+
+    if (bookResult.rows.length === 0) {
+      res.status(404).json({ error: 'Book not found' });
+      return;
+    }
+
+    const book = bookResult.rows[0];
+    const pagesRead = book.pages_read ?? 0;
+    const totalPages = book.total_pages ?? 0;
+
+    if (book.status === 'want-to-read') {
+      res.status(400).json({ error: 'Buku ini belum mulai dibaca — belum ada yang bisa dirangkum.' });
+      return;
+    }
+
+    // 2. Spoiler-safe book content. Completed books get everything; otherwise
+    //    only up to the page the reader has reached.
+    const maxPage = book.status === 'completed' ? Math.max(totalPages, pagesRead, 999999) : pagesRead;
+    let pdfContext: string[] = [];
+    try {
+      pdfContext = await getPagesContext(bookId, maxPage, 8000);
+    } catch (qdrantErr) {
+      console.log('Qdrant not available:', (qdrantErr as Error).message);
+    }
+
+    // 3. Reader notes (the heart of a reflection draft)
+    let notesContext = '';
+    try {
+      const notesResult = await pool.query(`
+        SELECT text, note_type, page_ref
+        FROM book_notes
+        WHERE book_id = $1 AND user_id = $2
+        ORDER BY COALESCE(page_ref, 0) ASC, created_at ASC
+      `, [bookId, req.userId]);
+      if (notesResult.rows.length > 0) {
+        const notesFormatted = notesResult.rows
+          .map((n, i) => {
+            const loc = n.page_ref ? ` (hal. ${n.page_ref})` : '';
+            const kind = n.note_type && n.note_type !== 'note' ? `[${n.note_type}] ` : '';
+            return `${i + 1}. ${kind}${n.text}${loc}`;
+          })
+          .join('\n');
+        notesContext = `\n=== CATATAN PEMBACA ===\n${notesFormatted}`;
+      }
+    } catch (noteErr) {
+      console.log('Failed to fetch notes:', (noteErr as Error).message);
+    }
+
+    if (mode === 'reflection' && !notesContext && pdfContext.length === 0) {
+      res.status(400).json({ error: 'Belum ada catatan atau isi buku buat dijadiin bahan refleksi.' });
+      return;
+    }
+
+    // 4. Build context + spoiler guard
+    const pct = totalPages > 0 ? Math.round((pagesRead / totalPages) * 100) : 0;
+    const contextParts: string[] = [
+      `Judul: "${book.title}"`,
+      `Penulis: ${book.author}`,
+      `Progress: halaman ${pagesRead} dari ${totalPages} (${pct}%)`,
+    ];
+    if (pdfContext.length > 0) {
+      contextParts.push(`\n=== ISI BUKU (halaman 1-${book.status === 'completed' ? totalPages : pagesRead}) ===\n${pdfContext.join('\n\n')}`);
+    }
+    if (notesContext) contextParts.push(notesContext);
+    const contextBlock = contextParts.join('\n');
+
+    const spoilerGuard = book.status === 'completed'
+      ? 'Buku ini SUDAH SELESAI dibaca. Boleh bahas seluruh isi buku.'
+      : `BATAS SPOILER: halaman ${pagesRead}. JANGAN sebut atau beri petunjuk apapun di luar halaman ${pagesRead}. INI MUTLAK.`;
+
+    const systemPrompt = mode === 'recap'
+      ? `Kamu adalah "Bacain" — asisten pengingat cerita. Buatkan RANGKUMAN singkat dari apa yang sudah terjadi di buku ini, buat bantu pembaca inget jalan cerita sebelum lanjut baca.
+
+=== DATA BUKU ===
+${contextBlock}
+==================
+
+### ATURAN ###
+1. 🚫 SPOILER: ${spoilerGuard}
+2. 🚫 JANGAN HALUSINASI: cuma dari konteks di atas. Kalau isinya tipis, rangkum seadanya, jangan ngarang.
+3. 📝 Format: paragraf ringkas atau poin-poin kronologis. Bahasa Indonesia santai.
+4. 🎯 Maksimal ~200 kata. Ini catatan pengingat, bukan esai.
+5. Langsung isi rangkumannya aja, tanpa kalimat pembuka macam "Berikut rangkumannya".`
+      : `Kamu adalah "Bacain" — asisten jurnal baca. Buatkan DRAFT REFLEKSI pribadi (sudut pandang pembaca, pakai "aku") berdasarkan CATATAN PEMBACA dan isi buku di bawah. Ini draft yang nanti diedit sendiri sama pembaca — jadi jujur, personal, dan grounded ke catatannya.
+
+=== DATA BUKU ===
+${contextBlock}
+==================
+
+### ATURAN ###
+1. 🚫 SPOILER: ${spoilerGuard}
+2. 🚫 JANGAN NGARANG opini yang nggak ada di catatan/isi buku. Kalau catatan tipis, tetep singkat & jujur.
+3. Utamakan CATATAN PEMBACA sebagai bahan utama — refleksi ini punya dia, bukan review umum.
+4. Bahasa Indonesia santai, sudut pandang orang pertama ("aku").
+5. WAJIB output PERSIS dalam format markdown ini, pakai heading ini apa adanya:
+
+**Yang paling nempel**
+<1-3 kalimat>
+
+**Rekomendasiin ke**
+<1-2 kalimat, buat siapa buku ini cocok>
+
+**Alasan rating**
+<1-2 kalimat soal kenapa buku ini berkesan / kurang; kalau ada rating ${book.rating || 0}/5 boleh disinggung>
+
+Jangan tambah heading lain, jangan ada kalimat pembuka/penutup di luar tiga bagian itu.`;
+
+    // 5. Call DeepSeek (one-shot, no history, not persisted)
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      res.status(500).json({ error: 'AI tidak dikonfigurasi - hubungi admin' });
+      return;
+    }
+
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: mode === 'recap'
+            ? 'Tolong rangkum apa yang udah terjadi sejauh ini.'
+            : 'Tolong bikin draft refleksiku buat buku ini.' },
+        ],
+        temperature: 0.6,
+        max_tokens: 700,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('DeepSeek API error:', response.status, errText);
+      res.status(502).json({ error: 'Gagal membuat draft. Coba lagi nanti.' });
+      return;
+    }
+
+    const data = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const draft = data.choices?.[0]?.message?.content?.trim();
+
+    if (!draft) {
+      res.status(502).json({ error: 'Gagal membuat draft. Coba lagi.' });
+      return;
+    }
+
+    res.json({ draft });
+
+  } catch (error) {
+    console.error('AI generate error:', error);
+    res.status(500).json({ error: 'Terjadi kesalahan. Coba lagi nanti.' });
+  }
+});
+
 export default router;
