@@ -9,6 +9,7 @@ import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
 import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, type BookNote } from "@/lib/api";
+import BookAIChat from "@/components/design/BookAIChat";
 
 function SectionHead({ title, subtitle, expanded, onToggle, action }: {
   title: string;
@@ -55,6 +56,7 @@ export default function BookDetail() {
   const book = books.find((b) => b.id === id);
 
   const [pagesInput, setPagesInput] = useState<string>("");
+  const [logDate, setLogDate] = useState<string>(today);
   const [notes, setNotes] = useState<BookNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteInput, setNoteInput] = useState("");
@@ -63,6 +65,7 @@ export default function BookDetail() {
   const [editNoteText, setEditNoteText] = useState("");
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
+  const [showAI, setShowAI] = useState(false);
 
   const notesColl = useCollapsible("book-notes", true);
   const quotesColl = useCollapsible("book-quotes", false);
@@ -88,6 +91,10 @@ export default function BookDetail() {
       loadNotes();
     }
   }, [book?.id, book?.pagesRead, loadNotes]);
+
+  useEffect(() => {
+    setLogDate(today);
+  }, [today]);
 
   if (isLoading) {
     return <div className="irm-loading"><div className="irm-spinner" /></div>;
@@ -129,14 +136,14 @@ export default function BookDetail() {
     const n = Math.max(0, Math.min(book.totalPages, parseInt(pagesInput, 10) || 0));
     if (n === book.pagesRead) return;
     if (n > book.pagesRead) {
-      await addReadingLog(book.id, book.pagesRead, n, today);
+      await addReadingLog(book.id, book.pagesRead, n, logDate);
     } else {
       await updateBook(book.id, { pagesRead: n });
     }
   };
 
   const markComplete = async () => {
-    await updateBook(book.id, { status: "completed" });
+    await updateBook(book.id, { status: "completed", finishedAt: logDate });
   };
 
   const updateStatus = async (status: BookData["status"]) => {
@@ -267,6 +274,11 @@ export default function BookDetail() {
             </div>
 
             <div className="irm-detail__metaitem">
+              <button className="irm-btn irm-btn--ghost" onClick={() => setShowAI((v) => !v)}>
+                💬 Bacain
+              </button>
+            </div>
+            <div className="irm-detail__metaitem">
               <button className="irm-btn irm-btn--danger" onClick={handleDeleteBook}>
                 <Icon.Trash size={13} /> Delete book
               </button>
@@ -314,10 +326,16 @@ export default function BookDetail() {
                     data-pages-input="true"
                     disabled={book.status === "completed"}
                     onChange={(e) => setPagesInput(e.target.value)}
-                    onBlur={savePages}
-                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                   />
                   <span className="irm-detail__pages-of irm-mono">/ </span>
+                  <input
+                    type="date"
+                    className="irm-input irm-mono"
+                    style={{ width: 140 }}
+                    value={logDate}
+                    onChange={(e) => setLogDate(e.target.value)}
+                    title="Date for this reading session"
+                  />
                   <input
                     type="number"
                     className="irm-input irm-mono"
@@ -336,8 +354,8 @@ export default function BookDetail() {
                     title="Total pages"
                   />
                   {book.status !== "completed" && (
-                    <button className="irm-btn irm-btn--ghost" onClick={markComplete}>
-                      <Icon.Check size={13} /> Mark complete
+                    <button className="irm-btn irm-btn--ghost" onClick={savePages}>
+                      <Icon.Check size={13} /> Save
                     </button>
                   )}
                 </div>
@@ -582,6 +600,19 @@ export default function BookDetail() {
           {bookLogs.length >= 2 && <SectionCard><PaceChart logs={bookLogs} height={60} /></SectionCard>}
         </div>
       </div>
+
+      {/* AI Chat */}
+      {showAI && (
+        <BookAIChat
+          bookId={book.id}
+          bookTitle={book.title}
+          bookAuthor={book.author}
+          status={book.status}
+          pagesRead={book.pagesRead}
+          totalPages={book.totalPages}
+          onClose={() => setShowAI(false)}
+        />
+      )}
     </div>
   );
 }

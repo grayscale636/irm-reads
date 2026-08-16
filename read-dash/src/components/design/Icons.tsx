@@ -101,6 +101,12 @@ export const Icon = {
       <circle cx="12" cy="13" r="4" />
     </svg>
   ),
+  Send: ({ size = 15 }: IconProps) => (
+    <svg {...base(size)}>
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  ),
   Logo: ({ size = 20 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />

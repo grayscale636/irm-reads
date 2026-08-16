@@ -8,6 +8,7 @@ import booksRouter from './routes/books';
 import readingLogsRouter from './routes/readingLogs';
 import notesRouter from './routes/notes';
 import goalsRouter from './routes/goals';
+import aiRouter from './routes/ai';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -146,6 +147,7 @@ app.use('/api/books', booksRouter);
 app.use('/api/reading-logs', readingLogsRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/goals', goalsRouter);
+app.use('/api/ai', aiRouter);
 
 // Error handler - include CORS headers even on errors
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
