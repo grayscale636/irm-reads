@@ -101,11 +101,22 @@ export async function getAllReadingLogs(): Promise<ReadingLog[]> {
 
 // ============ NOTES API ============
 
+export type NoteType = 'note' | 'reflection' | 'question';
+
 export interface BookNote {
   id: string;
   bookId: string;
   text: string;
+  noteType: NoteType;
+  pageRef?: number | null;
+  tags: string[];
   createdAt: string;
+}
+
+export interface NoteFields {
+  noteType?: NoteType;
+  pageRef?: number | null;
+  tags?: string[];
 }
 
 export interface JournalNote extends BookNote {
@@ -131,25 +142,26 @@ export async function getBookNotes(bookId: string): Promise<BookNote[]> {
   return response.json();
 }
 
-export async function addBookNote(bookId: string, text: string): Promise<BookNote> {
+export async function addBookNote(bookId: string, text: string, fields: NoteFields = {}): Promise<BookNote> {
   const response = await fetch(`${API_BASE}/notes`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ bookId, text }),
+    body: JSON.stringify({ bookId, text, ...fields }),
   });
   if (response.status === 401) throw new Error('Unauthorized');
   if (!response.ok) throw new Error('Failed to add note');
   return response.json();
 }
 
-export async function updateBookNote(id: string, text: string): Promise<void> {
+export async function updateBookNote(id: string, text: string, fields: NoteFields = {}): Promise<BookNote> {
   const response = await fetch(`${API_BASE}/notes/${id}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...fields }),
   });
   if (response.status === 401) throw new Error('Unauthorized');
   if (!response.ok) throw new Error('Failed to update note');
+  return response.json();
 }
 
 export async function deleteBookNote(id: string): Promise<void> {

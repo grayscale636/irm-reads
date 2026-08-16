@@ -8,8 +8,26 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, type BookNote } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, type BookNote, type NoteType } from "@/lib/api";
 import BookAIChat from "@/components/design/BookAIChat";
+import { ReflectionDialog } from "@/components/design/ReflectionDialog";
+import ReactMarkdown from "react-markdown";
+
+const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
+  { value: "note", label: "Note" },
+  { value: "reflection", label: "Reflection" },
+  { value: "question", label: "Question" },
+];
+
+// "theme, aha , character" -> ["theme","aha","character"]
+function parseTags(raw: string): string[] {
+  const seen = new Set<string>();
+  for (const t of raw.split(",")) {
+    const trimmed = t.trim();
+    if (trimmed) seen.add(trimmed);
+  }
+  return [...seen];
+}
 
 function SectionHead({ title, subtitle, expanded, onToggle, action }: {
   title: string;
@@ -61,13 +79,21 @@ export default function BookDetail() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteInput, setNoteInput] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteType, setNoteType] = useState<NoteType>("note");
+  const [notePage, setNotePage] = useState("");
+  const [noteTags, setNoteTags] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
+  const [editNoteType, setEditNoteType] = useState<NoteType>("note");
+  const [editPage, setEditPage] = useState("");
+  const [editTags, setEditTags] = useState("");
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const [showReflect, setShowReflect] = useState(false);
 
   const notesColl = useCollapsible("book-notes", true);
+  const reflectColl = useCollapsible("book-reflection", true);
   const quotesColl = useCollapsible("book-quotes", false);
   const historyColl = useCollapsible("book-history", false);
   const paceColl = useCollapsible("book-pace", true);
@@ -152,14 +178,30 @@ export default function BookDetail() {
       updates.finishedAt = today;
     }
     await updateBook(book.id, updates);
+    // First time finishing a book with no reflection yet → nudge with prompts.
+    if (status === "completed" && !book.reflection?.trim()) {
+      setShowReflect(true);
+    }
+  };
+
+  const openNoteForm = () => {
+    setNoteType("note");
+    setNotePage(book.pagesRead ? String(book.pagesRead) : "");
+    setNoteTags("");
+    setShowNoteForm(true);
   };
 
   const addNote = async () => {
     const text = noteInput.trim();
     if (!text) return;
     try {
-      await addBookNote(book.id, text);
+      await addBookNote(book.id, text, {
+        noteType,
+        pageRef: notePage ? parseInt(notePage, 10) : null,
+        tags: parseTags(noteTags),
+      });
       setNoteInput("");
+      setNoteTags("");
       setShowNoteForm(false);
       await loadNotes();
     } catch (e) {
@@ -179,6 +221,9 @@ export default function BookDetail() {
   const startEditNote = (note: BookNote) => {
     setEditingNoteId(note.id);
     setEditNoteText(note.text);
+    setEditNoteType(note.noteType || "note");
+    setEditPage(note.pageRef ? String(note.pageRef) : "");
+    setEditTags((note.tags || []).join(", "));
   };
 
   const cancelEditNote = () => {
@@ -188,14 +233,23 @@ export default function BookDetail() {
 
   const saveEditNote = async () => {
     if (!editingNoteId || !editNoteText.trim()) return;
+    const fields = {
+      noteType: editNoteType,
+      pageRef: editPage ? parseInt(editPage, 10) : null,
+      tags: parseTags(editTags),
+    };
     try {
-      await updateBookNote(editingNoteId, editNoteText.trim());
-      setNotes((prev) => prev.map((n) => n.id === editingNoteId ? { ...n, text: editNoteText.trim() } : n));
+      const updated = await updateBookNote(editingNoteId, editNoteText.trim(), fields);
+      setNotes((prev) => prev.map((n) => (n.id === editingNoteId ? updated : n)));
       setEditingNoteId(null);
       setEditNoteText("");
     } catch (e) {
       console.error("Failed to update note:", e);
     }
+  };
+
+  const saveReflection = async (reflection: string) => {
+    await updateBook(book.id, { reflection });
   };
 
   const addQuote = async () => {
@@ -364,6 +418,36 @@ export default function BookDetail() {
 
           </section>
 
+          {/* ── Reflection ── */}
+          <SectionCard>
+            <SectionHead
+              title="Reflection"
+              subtitle="Your wrap-up thoughts on this book."
+              expanded={reflectColl.open}
+              onToggle={reflectColl.toggle}
+              action={
+                reflectColl.open && (
+                  <button className="irm-btn irm-btn--ghost" onClick={() => setShowReflect(true)}>
+                    <Icon.Edit size={13} /> {book.reflection?.trim() ? "Edit" : "Write"}
+                  </button>
+                )
+              }
+            />
+            {reflectColl.open && (
+              book.reflection?.trim() ? (
+                <div className="irm-reflect__view irm-markdown">
+                  <ReactMarkdown>{book.reflection}</ReactMarkdown>
+                </div>
+              ) : (
+                <div className="irm-empty" style={{ padding: "24px 0" }}>
+                  <div className="irm-empty__text">
+                    No reflection yet — a few prompts will help you capture what stuck.
+                  </div>
+                </div>
+              )
+            )}
+          </SectionCard>
+
           {/* ── Notes ── */}
           <SectionCard>
             <SectionHead
@@ -373,7 +457,7 @@ export default function BookDetail() {
               onToggle={notesColl.toggle}
               action={
                 notesColl.open && !showNoteForm && (
-                  <button className="irm-btn irm-btn--ghost" onClick={() => setShowNoteForm(true)}>
+                  <button className="irm-btn irm-btn--ghost" onClick={openNoteForm}>
                     <Icon.Plus size={13} /> Add note
                   </button>
                 )
@@ -398,6 +482,36 @@ export default function BookDetail() {
                     }
                     autoFocus
                   />
+                  <div className="irm-note__form-meta">
+                    <select
+                      className="irm-input"
+                      value={noteType}
+                      onChange={(e) => setNoteType(e.target.value as NoteType)}
+                      title="Note type"
+                    >
+                      {NOTE_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      className="irm-input irm-mono"
+                      value={notePage}
+                      min={0}
+                      max={book.totalPages || undefined}
+                      placeholder="Page"
+                      onChange={(e) => setNotePage(e.target.value)}
+                      title="Page reference"
+                    />
+                    <input
+                      type="text"
+                      className="irm-input"
+                      value={noteTags}
+                      placeholder="Tags (comma separated)"
+                      onChange={(e) => setNoteTags(e.target.value)}
+                      title="Tags"
+                    />
+                  </div>
                   <div className="irm-reflect__actions">
                     <button
                       className="irm-btn irm-btn--ghost"
@@ -430,12 +544,19 @@ export default function BookDetail() {
                     <div key={n.id} className="irm-note">
                       <div className="irm-note__head">
                         <div className="irm-note__meta">
-                          <Icon.ChevronRight size={12} />
+                          {n.noteType && n.noteType !== "note" && (
+                            <span className={`irm-pill irm-pill--${n.noteType}`}>
+                              {n.noteType === "reflection" ? "Reflection" : "Question"}
+                            </span>
+                          )}
                           <span className="irm-note__date">
                             {new Date(n.createdAt).toLocaleDateString("en-ID", {
                               month: "short", day: "numeric"
                             })}
                           </span>
+                          {n.pageRef ? (
+                            <span className="irm-note__page irm-mono">p.{n.pageRef}</span>
+                          ) : null}
                         </div>
                         <div className="irm-note__actions">
                           <button className="irm-logitem__delete" onClick={() => startEditNote(n)}>
@@ -455,6 +576,32 @@ export default function BookDetail() {
                             onChange={(e) => setEditNoteText(e.target.value)}
                             autoFocus
                           />
+                          <div className="irm-note__form-meta">
+                            <select
+                              className="irm-input"
+                              value={editNoteType}
+                              onChange={(e) => setEditNoteType(e.target.value as NoteType)}
+                            >
+                              {NOTE_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="number"
+                              className="irm-input irm-mono"
+                              value={editPage}
+                              min={0}
+                              placeholder="Page"
+                              onChange={(e) => setEditPage(e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              className="irm-input"
+                              value={editTags}
+                              placeholder="Tags (comma separated)"
+                              onChange={(e) => setEditTags(e.target.value)}
+                            />
+                          </div>
                           <div className="irm-reflect__actions">
                             <button className="irm-btn irm-btn--ghost" onClick={cancelEditNote}>Cancel</button>
                             <button className="irm-btn irm-btn--primary" disabled={!editNoteText.trim()} onClick={saveEditNote}>
@@ -463,7 +610,16 @@ export default function BookDetail() {
                           </div>
                         </div>
                       ) : (
-                        <p className="irm-note__text">{n.text}</p>
+                        <>
+                          <p className="irm-note__text">{n.text}</p>
+                          {n.tags && n.tags.length > 0 && (
+                            <div className="irm-note__tags">
+                              {n.tags.map((tag) => (
+                                <span key={tag} className="irm-tag">#{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
@@ -613,6 +769,14 @@ export default function BookDetail() {
           onClose={() => setShowAI(false)}
         />
       )}
+
+      <ReflectionDialog
+        open={showReflect}
+        bookTitle={book.title}
+        initial={book.reflection}
+        onClose={() => setShowReflect(false)}
+        onSave={saveReflection}
+      />
     </div>
   );
 }

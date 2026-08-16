@@ -23,11 +23,16 @@ export interface Book {
   quotes?: string[];
 }
 
+export type NoteType = 'note' | 'reflection' | 'question';
+
 export interface BookNote {
   id: string;
   bookId: string;
   userId: string;
   text: string;
+  noteType: NoteType;
+  pageRef?: number | null;
+  tags: string[];
   createdAt: string;
 }
 
