@@ -247,7 +247,7 @@ Kamu adalah "pengingat cerita". Kalau pembaca lupa "siapa tokoh ini?" atau "apa 
         model: 'deepseek-chat',
         messages: apiMessages,
         temperature: 0.5,
-        max_tokens: 600,
+        max_tokens: 3000,
       }),
     });
 
@@ -447,7 +447,7 @@ Jangan tambah heading lain, jangan ada kalimat pembuka/penutup di luar tiga bagi
             : 'Tolong bikin draft refleksiku buat buku ini.' },
         ],
         temperature: 0.6,
-        max_tokens: 700,
+        max_tokens: 1500,
       }),
     });
 

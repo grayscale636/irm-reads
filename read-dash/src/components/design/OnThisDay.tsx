@@ -56,7 +56,6 @@ export function OnThisDay({ books, today, onOpenBook }: Props) {
   const { open, toggle } = useCollapsible("dashboard-onthisday", true);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [seed, setSeed] = useState(0);
 
   // Reader notes come from the API; quotes ride along on each book.
   useEffect(() => {
@@ -118,11 +117,11 @@ export function OnThisDay({ books, today, onOpenBook }: Props) {
     const pool = entries.filter((e) => e.day < cutoff);
     if (pool.length === 0) return { items: [], mode: "resurface" as const };
 
-    // Deterministic pick per `seed` so re-renders don't reshuffle on their own.
+    // Deterministic pick so re-renders don't reshuffle on their own.
     const picks: Entry[] = [];
     const used = new Set<number>();
     const n = Math.min(MAX_ITEMS, pool.length);
-    let cursor = seed * 2654435761;
+    let cursor = 0;
     while (picks.length < n) {
       cursor = (cursor * 48271 + 1) % 2147483647;
       const idx = Math.abs(cursor) % pool.length;
@@ -132,7 +131,7 @@ export function OnThisDay({ books, today, onOpenBook }: Props) {
       }
     }
     return { items: picks, mode: "resurface" as const };
-  }, [entries, today, seed]);
+  }, [entries, today]);
 
   // Hide entirely when there's nothing worth resurfacing (e.g. new journals).
   if (!loaded || items.length === 0) return null;
@@ -153,16 +152,6 @@ export function OnThisDay({ books, today, onOpenBook }: Props) {
           </p>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {!isAnniversary && (
-            <button
-              type="button"
-              className="irm-btn irm-btn--ghost"
-              onClick={() => setSeed((s) => s + 1)}
-              title="Show different entries"
-            >
-              🎲 Shuffle
-            </button>
-          )}
           <button
             type="button"
             className="irm-section-toggle"

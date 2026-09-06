@@ -9,6 +9,7 @@ import readingLogsRouter from './routes/readingLogs';
 import notesRouter from './routes/notes';
 import goalsRouter from './routes/goals';
 import aiRouter from './routes/ai';
+import ocrRouter from './routes/ocr';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -57,6 +58,11 @@ app.use(cors(corsOptions));
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
+
+// OCR router mounted BEFORE the general rate limiter: long whole-book OCR runs
+// make the frontend poll the job status frequently, which would otherwise trip
+// the 200/15min cap. It stays protected by JWT auth inside the router.
+app.use('/api/ocr', ocrRouter);
 
 // Rate limiting - general
 const generalLimiter = rateLimit({

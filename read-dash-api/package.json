@@ -27,6 +27,7 @@
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.2.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.16.3"
   },
@@ -35,6 +36,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.2.0",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "nodemon": "^3.1.11",

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { useBooks, type BookData } from "@/contexts/BooksContext";
 import type { OutletCtx } from "@/layouts/AppLayout";
@@ -8,7 +8,7 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, normalizeQuote, type BookNote, type NoteType, type QuoteItem } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, startOcrImport, getOcrJob, normalizeQuote, type BookNote, type NoteType, type QuoteItem } from "@/lib/api";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import { downloadBookMarkdown } from "@/lib/export";
@@ -99,6 +99,14 @@ export default function BookDetail() {
   const [showAI, setShowAI] = useState(false);
   const [showReflect, setShowReflect] = useState(false);
   const [recapLoading, setRecapLoading] = useState(false);
+
+  // OCR import state
+  const [ocrImporting, setOcrImporting] = useState(false);
+  const [ocrProcessed, setOcrProcessed] = useState(0);
+  const [ocrPageCount, setOcrPageCount] = useState(0);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrDoneCount, setOcrDoneCount] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const notesColl = useCollapsible("book-notes", true);
   const reflectColl = useCollapsible("book-reflection", true);
@@ -231,6 +239,44 @@ export default function BookDetail() {
       await loadNotes();
     } catch (e) {
       console.error("Failed to add note:", e);
+    }
+  };
+
+  const handleOcrFile = async (file: File) => {
+    if (!book) return;
+    setOcrImporting(true);
+    setOcrError(null);
+    setOcrDoneCount(null);
+    setOcrProcessed(0);
+    setOcrPageCount(0);
+    try {
+      const { jobId } = await startOcrImport(book.id, file);
+      const poll = async () => {
+        try {
+          const job = await getOcrJob(jobId);
+          setOcrProcessed(job.processedPages ?? 0);
+          setOcrPageCount(job.pageCount ?? 0);
+          if (job.status === "done") {
+            setOcrImporting(false);
+            setOcrDoneCount(job.notesCreated ?? 0);
+            await loadNotes();
+            return;
+          }
+          if (job.status === "error") {
+            setOcrImporting(false);
+            setOcrError(job.error || "OCR failed");
+            return;
+          }
+          setTimeout(poll, 3000);
+        } catch (e) {
+          setOcrImporting(false);
+          setOcrError(e instanceof Error ? e.message : "OCR failed");
+        }
+      };
+      poll();
+    } catch (e) {
+      setOcrImporting(false);
+      setOcrError(e instanceof Error ? e.message : "Failed to start OCR");
     }
   };
 
@@ -526,6 +572,17 @@ export default function BookDetail() {
 
           {/* ── Notes ── */}
           <SectionCard>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,image/png,image/jpeg,image/webp,image/bmp,image/tiff"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleOcrFile(f);
+                e.target.value = "";
+              }}
+            />
             <SectionHead
               title="Notes"
               subtitle={<><span className="irm-mono">{notes.length}</span> entries</>}
@@ -552,6 +609,14 @@ export default function BookDetail() {
                         )}
                       </button>
                     )}
+                    <button
+                      className="irm-btn irm-btn--ghost"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={ocrImporting}
+                      title="Upload buku (PDF/gambar) — teksnya di-OCR jadi catatan otomatis"
+                    >
+                      📄 Import OCR
+                    </button>
                     <button className="irm-btn irm-btn--ghost" onClick={openNoteForm}>
                       <Icon.Plus size={13} /> Add note
                     </button>
@@ -560,6 +625,23 @@ export default function BookDetail() {
               }
             />
             {notesColl.open && <>
+              {(ocrImporting || ocrError || ocrDoneCount !== null) && (
+                <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: "var(--irm-bg-2, #f5f5f7)", fontSize: 13 }}>
+                  {ocrImporting && (
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <span className="irm-spinner" style={{ width: 14, height: 14 }} />
+                        <span>OCR jalan… halaman {ocrProcessed}{ocrPageCount ? ` / ${ocrPageCount}` : ""}</span>
+                      </div>
+                      {ocrPageCount > 0 && <ProgressBar value={ocrProcessed} max={ocrPageCount} height={6} />}
+                    </div>
+                  )}
+                  {ocrError && <div style={{ color: "#dc2626" }}>⚠️ {ocrError}</div>}
+                  {ocrDoneCount !== null && !ocrImporting && (
+                    <div style={{ color: "#16a34a" }}>✅ {ocrDoneCount} catatan berhasil diimpor dari OCR.</div>
+                  )}
+                </div>
+              )}
               {showNoteForm && (
                 <div className="irm-reflect__edit" style={{ marginBottom: 16 }}>
                   <textarea

@@ -14,6 +14,7 @@ import {
 } from "d3-force";
 import { useBooks } from "@/contexts/BooksContext";
 import { getAllNotes, normalizeQuote, type JournalNote } from "@/lib/api";
+import { Icon } from "@/components/design/Icons";
 
 type NodeType = "author" | "book" | "note" | "quote";
 
@@ -28,11 +29,19 @@ interface GNode extends SimulationNodeDatum {
 
 type GLink = SimulationLinkDatum<GNode>;
 
+interface InspectorDetail {
+  type: NodeType;
+  title: string;
+  meta: string;
+  rows?: { label: string; value: string }[];
+  bookId?: string;
+}
+
 const TYPE_META: Record<NodeType, { label: string; color: string }> = {
-  author: { label: "Author", color: "#6366f1" },
-  book: { label: "Book", color: "#0ea5e9" },
-  note: { label: "Note", color: "#f59e0b" },
-  quote: { label: "Quote", color: "#a855f7" },
+  author: { label: "Author", color: "#0072B2" },
+  book: { label: "Book", color: "#E69F00" },
+  note: { label: "Note", color: "#009E73" },
+  quote: { label: "Quote", color: "#CC79A7" },
 };
 
 const ALL_TYPES: NodeType[] = ["author", "book", "note", "quote"];
@@ -46,11 +55,13 @@ export default function Graph() {
     author: true, book: true, note: true, quote: true,
   });
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState({ tx: 0, ty: 0, k: 1 });
   const viewInit = useRef(false);
+  const fittedRef = useRef(false);
   const [headerH, setHeaderH] = useState(56);
 
   const simRef = useRef<Simulation<GNode, GLink> | null>(null);
@@ -68,7 +79,8 @@ export default function Graph() {
     return () => { mounted = false; };
   }, []);
 
-  // Keep the full-bleed canvas flush under the sticky app header.
+  // Keep the graph page exactly one viewport tall (no page scroll) by
+  // measuring the sticky header height.
   useEffect(() => {
     const measure = () => {
       const h = document.querySelector(".irm-header")?.getBoundingClientRect().height;
@@ -79,7 +91,8 @@ export default function Graph() {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  // Measure the canvas area.
+  // Measure the canvas area. Re-run once data has loaded so the canvas (not
+  // the loading spinner) is the observed element.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -93,7 +106,7 @@ export default function Graph() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [isLoading, notesLoaded]);
 
   // Build the graph model (nodes + links) from books, notes, quotes.
   const graph = useMemo(() => {
@@ -193,9 +206,34 @@ export default function Graph() {
     return map;
   }, [graph]);
 
+  // Fit the whole graph into the canvas once the layout settles, so nothing
+  // gets clipped by the window edges.
+  const fitToView = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ns = nodesRef.current.filter((n) => n.x != null && n.y != null);
+    if (ns.length === 0) return;
+    const pad = 64;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of ns) {
+      minX = Math.min(minX, n.x! - n.r);
+      maxX = Math.max(maxX, n.x! + n.r);
+      minY = Math.min(minY, n.y! - n.r);
+      maxY = Math.max(maxY, n.y! + n.r);
+    }
+    const spanX = Math.max(maxX - minX, 1);
+    const spanY = Math.max(maxY - minY, 1);
+    const r = el.getBoundingClientRect();
+    const k = Math.min(4, Math.max(0.05, Math.min((r.width - pad * 2) / spanX, (r.height - pad * 2) / spanY)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setView({ k, tx: r.width / 2 - cx * k, ty: r.height / 2 - cy * k });
+  }, []);
+
   // (Re)build the simulation whenever the graph model changes. Node objects are
   // reused across rebuilds so positions carry over and the layout stays stable.
   useEffect(() => {
+    fittedRef.current = false;
     const prev = new Map(nodesRef.current.map((n) => [n.id, n]));
     const nodes = graph.nodes.map((n) => {
       const p = prev.get(n.id);
@@ -214,11 +252,18 @@ export default function Graph() {
       .force("center", forceCenter(0, 0))
       .force("x", forceX(0).strength(0.03))
       .force("y", forceY(0).strength(0.03))
-      .on("tick", () => forceRender((t) => t + 1));
+      .on("tick", () => {
+        forceRender((t) => t + 1);
+        const s = simRef.current;
+        if (!fittedRef.current && s && s.alpha() < 0.05) {
+          fittedRef.current = true;
+          fitToView();
+        }
+      });
 
     simRef.current = sim;
     return () => { sim.stop(); };
-  }, [graph]);
+  }, [graph, fitToView]);
 
   const toGraphCoords = useCallback(
     (clientX: number, clientY: number) => {
@@ -290,7 +335,7 @@ export default function Graph() {
       const my = e.clientY - rect.top;
       setView((v) => {
         const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-        const k = Math.min(4, Math.max(0.2, v.k * factor));
+        const k = Math.min(4, Math.max(0.05, v.k * factor));
         return {
           k,
           tx: mx - (mx - v.tx) * (k / v.k),
@@ -300,7 +345,7 @@ export default function Graph() {
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [isLoading, notesLoaded]);
 
   const stats = useMemo(() => {
     const authorBooks = new Map<string, number>();
@@ -318,6 +363,67 @@ export default function Graph() {
     return { topAuthor, topAuthorN, topBook, topBookN, authors: authorBooks.size };
   }, [books, notes]);
 
+  // Detail for the inspector card (top-right) for the hovered node.
+  const hoverDetail = useMemo<InspectorDetail | null>(() => {
+    if (!hoverId) return null;
+    if (hoverId.startsWith("author:")) {
+      const name = hoverId.slice("author:".length);
+      const list = books.filter((b) => b.author === name);
+      return {
+        type: "author",
+        title: name,
+        meta: `${list.length} book${list.length === 1 ? "" : "s"}`,
+        rows: list.map((b) => ({ label: b.title, value: b.status })),
+      };
+    }
+    if (hoverId.startsWith("book:")) {
+      const bookId = hoverId.slice("book:".length);
+      const b = books.find((x) => x.id === bookId);
+      if (!b) return null;
+      const noteCount = notes.filter((n) => n.bookId === bookId).length;
+      const quoteCount = (Array.isArray(b.quotes) ? b.quotes : []).length;
+      return {
+        type: "book",
+        title: b.title,
+        meta: b.author,
+        rows: [
+          { label: "Status", value: b.status },
+          { label: "Progress", value: `${b.pagesRead ?? 0} / ${b.totalPages ?? 0} hlm` },
+          { label: "Notes", value: String(noteCount) },
+          { label: "Quotes", value: String(quoteCount) },
+        ],
+        bookId,
+      };
+    }
+    if (hoverId.startsWith("note:")) {
+      const noteId = hoverId.slice("note:".length);
+      const n = notes.find((x) => x.id === noteId);
+      if (!n) return null;
+      return {
+        type: "note",
+        title: n.bookTitle || "Note",
+        meta: n.text,
+        rows: n.pageRef != null ? [{ label: "Halaman", value: String(n.pageRef) }] : [],
+      };
+    }
+    if (hoverId.startsWith("quote:")) {
+      const rest = hoverId.slice("quote:".length);
+      const sep = rest.lastIndexOf(":");
+      const bookId = sep > 0 ? rest.slice(0, sep) : rest;
+      const idx = sep > 0 ? Number(rest.slice(sep + 1)) : NaN;
+      const b = books.find((x) => x.id === bookId);
+      const q = b ? normalizeQuote((Array.isArray(b.quotes) ? b.quotes : [])[idx]) : null;
+      if (!q || !q.text) return null;
+      return {
+        type: "quote",
+        title: b?.title || "Quote",
+        meta: q.text,
+        rows: q.page != null ? [{ label: "Halaman", value: String(q.page) }] : [],
+      };
+    }
+    return null;
+  }, [hoverId, books, notes]);
+
   const nodes = nodesRef.current;
   const links = linksRef.current;
   const highlight = hoverId ? neighbors.get(hoverId) : null;
@@ -328,7 +434,13 @@ export default function Graph() {
   }
 
   return (
-    <div className="irm-graph-page" style={{ top: headerH }}>
+    <div className="irm-graph-page" style={{ height: `calc(100vh - ${headerH}px)` }}>
+      <div className="irm-page-head">
+        <div>
+          <h1 className="irm-page-title">Reading map</h1>
+          <p className="irm-page-sub">A network of interconnected authors, books, notes, and quotes.</p>
+        </div>
+      </div>
       <div
         className="irm-graph__canvas"
         ref={wrapRef}
@@ -336,6 +448,7 @@ export default function Graph() {
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerLeave={endDrag}
+        onMouseLeave={() => setHoverId(null)}
       >
           {nodes.length === 0 ? (
             <div className="irm-empty" style={{ height: "100%" }}>
@@ -369,7 +482,6 @@ export default function Graph() {
                       style={{ opacity: dim ? 0.2 : 1, cursor: n.bookId ? "pointer" : "grab" }}
                       onPointerDown={(e) => onNodePointerDown(e, n)}
                       onMouseEnter={() => setHoverId(n.id)}
-                      onMouseLeave={() => setHoverId(null)}
                     >
                       <circle
                         r={n.r}
@@ -401,7 +513,6 @@ export default function Graph() {
                 key={t}
                 className={`irm-graph__legend-item${visible[t] ? "" : " is-off"}`}
                 onClick={() => setVisible((v) => ({ ...v, [t]: !v[t] }))}
-                title={`Toggle ${TYPE_META[t].label}`}
               >
                 <span className="irm-graph__swatch" style={{ background: TYPE_META[t].color }} />
                 {TYPE_META[t].label}
@@ -411,17 +522,63 @@ export default function Graph() {
 
           {/* Stats */}
           <div className="irm-graph__stats">
-            <div className="irm-graph__stat">
-              <span className="irm-graph__stat-label">Most read author</span>
-              <span className="irm-graph__stat-val">{stats.topAuthor}</span>
-              <span className="irm-graph__stat-sub irm-mono">{stats.topAuthorN} books</span>
-            </div>
-            <div className="irm-graph__stat">
-              <span className="irm-graph__stat-label">Most noted book</span>
-              <span className="irm-graph__stat-val">{stats.topBook}</span>
-              <span className="irm-graph__stat-sub irm-mono">{stats.topBookN} notes</span>
-            </div>
+            <button
+              type="button"
+              className="irm-graph__stats-head"
+              onClick={() => setStatsOpen((o) => !o)}
+              aria-expanded={statsOpen}
+            >
+              <span>Stats</span>
+              <span className={`irm-graph__stats-chev${statsOpen ? " is-open" : ""}`}>
+                <Icon.ChevronDown size={14} />
+              </span>
+            </button>
+            {statsOpen && (
+              <div className="irm-graph__stats-body">
+                <div className="irm-graph__stat">
+                  <span className="irm-graph__stat-label">Most Featured Author</span>
+                  <span className="irm-graph__stat-val">{stats.topAuthor}</span>
+                  <span className="irm-graph__stat-sub irm-mono">{stats.topAuthorN} books</span>
+                </div>
+                <div className="irm-graph__stat">
+                  <span className="irm-graph__stat-label">Most noted book</span>
+                  <span className="irm-graph__stat-val">{stats.topBook}</span>
+                  <span className="irm-graph__stat-sub irm-mono">{stats.topBookN} notes</span>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Inspector (top-right) for hovered node */}
+          {hoverDetail && (
+            <div className="irm-graph__inspector">
+              <div className="irm-graph__inspector-head">
+                <span className="irm-graph__swatch" style={{ background: TYPE_META[hoverDetail.type].color }} />
+                <span className="irm-graph__inspector-title">{hoverDetail.title}</span>
+                <span className="irm-graph__inspector-type irm-mono">{TYPE_META[hoverDetail.type].label}</span>
+              </div>
+              {hoverDetail.meta && <p className="irm-graph__inspector-meta">{hoverDetail.meta}</p>}
+              {hoverDetail.rows && hoverDetail.rows.length > 0 && (
+                <div className="irm-graph__inspector-rows">
+                  {hoverDetail.rows.map((r, i) => (
+                    <div key={i} className="irm-graph__inspector-row">
+                      <span className="irm-graph__inspector-row-label">{r.label}</span>
+                      <span className="irm-graph__inspector-row-val irm-mono">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {hoverDetail.bookId && (
+                <button
+                  type="button"
+                  className="irm-btn irm-btn--ghost irm-graph__inspector-open"
+                  onClick={() => navigate(`/book/${hoverDetail.bookId}`)}
+                >
+                  Buka buku <Icon.ChevronRight size={14} />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Interaction hint */}
           <div className="irm-graph__hint irm-mono">drag · scroll to zoom · click a book to open</div>

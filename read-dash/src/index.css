@@ -1088,20 +1088,20 @@ button { font-family: inherit; }
   overflow: hidden;
 }
 /* ── Graph view ── */
-/* Full-bleed: fixed below the sticky header, filling the rest of the viewport.
-   `top` is set inline from the measured header height. */
 .irm-graph-page {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 5;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
 }
+.irm-graph-page .irm-page-head { flex-shrink: 0; }
 .irm-graph-page .irm-graph__canvas {
-  height: 100%;
+  flex: 1;
+  height: auto;
   min-height: 0;
-  border: 0;
-  border-radius: 0;
 }
 .irm-graph { margin-top: 4px; }
 .irm-graph__canvas {
@@ -1174,6 +1174,34 @@ button { font-family: inherit; }
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
 }
+.irm-graph__stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.irm-graph__stats-chev {
+  display: inline-flex;
+  color: var(--ink-muted);
+  transition: transform 0.15s;
+}
+.irm-graph__stats-chev.is-open { transform: rotate(180deg); }
+.irm-graph__stats-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .irm-graph__stat { display: flex; flex-direction: column; gap: 1px; }
 .irm-graph__stat-label {
   font-size: 10px;
@@ -1203,6 +1231,79 @@ button { font-family: inherit; }
   padding: 4px 10px;
   border-radius: 20px;
   pointer-events: none;
+}
+.irm-graph__inspector {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 260px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
+}
+.irm-graph__inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.irm-graph__inspector-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.irm-graph__inspector-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.irm-graph__inspector-meta {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.irm-graph__inspector-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.irm-graph__inspector-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.irm-graph__inspector-row-label { color: var(--ink-muted); }
+.irm-graph__inspector-row-val {
+  color: var(--ink-soft);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.irm-graph__inspector-open {
+  margin-top: 2px;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 @media (max-width: 560px) {
   .irm-graph__hint { display: none; }

@@ -256,3 +256,44 @@ export async function setGoal(year: number, target: number | null): Promise<numb
   const data = await response.json();
   return data.target ?? null;
 }
+
+// ============ OCR IMPORT ============
+
+export interface OcrJob {
+  jobId: string;
+  bookId: string;
+  status: 'processing' | 'done' | 'error';
+  pageCount: number;
+  processedPages: number;
+  notesCreated: number;
+  error?: string;
+  createdAt: number;
+}
+
+/** Upload a book file (PDF/image) and start background OCR → auto-notes. */
+export async function startOcrImport(bookId: string, file: File): Promise<{ jobId: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  const token = localStorage.getItem('auth_token');
+  const response = await fetch(`${API_BASE}/ocr/books/${bookId}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({} as { error?: string }));
+    throw new Error(err.error || 'Failed to start OCR import');
+  }
+  return response.json();
+}
+
+/** Poll an OCR import job. */
+export async function getOcrJob(jobId: string): Promise<OcrJob> {
+  const response = await fetch(`${API_BASE}/ocr/jobs/${jobId}`, {
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to fetch OCR job');
+  return response.json();
+}

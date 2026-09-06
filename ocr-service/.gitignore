@@ -1,0 +1,11 @@
+# Python virtualenv (huge — never commit)
+venv/
+
+# Runtime
+logs/
+*.log
+__pycache__/
+*.pyc
+
+# Local test artifacts
+/tmp/
