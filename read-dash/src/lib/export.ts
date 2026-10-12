@@ -10,6 +10,7 @@ import {
   type ReadingLog,
   type BookNote,
 } from "./api";
+import { statusOptionLabel } from "./media";
 
 function triggerDownload(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -90,21 +91,13 @@ export async function downloadBackup(): Promise<void> {
   );
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  reading: "Reading",
-  completed: "Completed",
-  "want-to-read": "Want to read",
-  paused: "Paused",
-  dnf: "Did not finish",
-};
-
 /** Render a single book — metadata, reflection, notes, quotes — as Markdown. */
 export function bookToMarkdown(book: Book, notes: BookNote[], logs: ReadingLog[]): string {
   const lines: string[] = [];
   lines.push(`# ${book.title}`);
   lines.push(`*by ${book.author}*`, "");
 
-  const meta: string[] = [`- **Status:** ${STATUS_LABEL[book.status] || book.status}`];
+  const meta: string[] = [`- **Status:** ${statusOptionLabel(book.status, book.mediaType)}`];
   if (book.rating > 0) meta.push(`- **Rating:** ${book.rating}/5`);
   if (book.totalPages > 0) {
     const pct = Math.round((book.pagesRead / book.totalPages) * 100);
