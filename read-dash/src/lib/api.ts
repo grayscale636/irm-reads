@@ -396,3 +396,48 @@ export async function getThemeNotes(slug: string): Promise<ThemeNote[]> {
   if (!response.ok) throw new Error('Failed to load theme');
   return response.json();
 }
+
+// ============ SEMANTIC API ============
+
+export interface SemanticPoint {
+  id: string;
+  x: number;
+  y: number;
+  bookId: string;
+  bookTitle: string;
+  mediaType: MediaType;
+  text: string;
+  isSpoiler: boolean;
+  noteType: NoteType;
+  themes: string[];
+}
+
+export interface SemanticMapData {
+  points: SemanticPoint[];
+  edges: Array<{ source: string; target: string; score: number }>;
+}
+
+export interface RelatedNote {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  mediaType: MediaType;
+  text: string;
+  isSpoiler: boolean;
+  ref: string | null;
+  score: number;
+}
+
+export async function getSemanticMap(): Promise<SemanticMapData> {
+  const response = await fetch(`${API_BASE}/semantic/map`, { headers: getAuthHeaders() });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Semantic map unavailable');
+  return response.json();
+}
+
+export async function getRelatedNotes(noteId: string, limit = 5): Promise<RelatedNote[]> {
+  const response = await fetch(`${API_BASE}/semantic/related/${noteId}?limit=${limit}`, { headers: getAuthHeaders() });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Related notes unavailable');
+  return response.json();
+}

@@ -16,6 +16,7 @@ import { useBooks } from "@/contexts/BooksContext";
 import { getAllNotes, normalizeQuote, type JournalNote } from "@/lib/api";
 import { Icon } from "@/components/design/Icons";
 import { formatHours, playMinutes, statusLabel } from "@/lib/media";
+import { SemanticMap } from "@/components/design/SemanticMap";
 
 // Books and games are separate node types (authors vs developers likewise).
 type NodeType = "author" | "book" | "developer" | "game" | "note" | "quote";
@@ -64,7 +65,15 @@ export default function Graph() {
   // Global Books/Games filter, kept in the URL like the library shelf.
   const [params, setParams] = useSearchParams();
   const media: Media = params.get("media") === "games" ? "games" : params.get("media") === "books" ? "books" : "all";
-  const setMedia = (m: Media) => setParams(m === "all" ? {} : { media: m }, { replace: true });
+  // Network (relations) vs Semantic (notes placed by meaning); both kept in the URL.
+  const viewMode: "network" | "semantic" = params.get("view") === "semantic" ? "semantic" : "network";
+  const setParam = (key: string, value: string | null) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next, { replace: true });
+  };
+  const setMedia = (m: Media) => setParam("media", m === "all" ? null : m);
   const shownTypes = ALL_TYPES.filter((t) =>
     media === "books" ? !GAME_ONLY.includes(t) : media === "games" ? !BOOK_ONLY.includes(t) : true,
   );
@@ -469,6 +478,22 @@ export default function Graph() {
   const highlight = hoverId ? neighbors.get(hoverId) : null;
   const isDim = (id: string) => hoverId != null && id !== hoverId && !(highlight?.has(id));
 
+  const mediaSwitch = (
+    <div className="irm-mediaswitch" role="tablist">
+      {(["all", "books", "games"] as Media[]).map((m) => (
+        <button
+          key={m}
+          role="tab"
+          aria-selected={media === m}
+          className={`irm-mediaswitch__btn${media === m ? " is-active" : ""}`}
+          onClick={() => setMedia(m)}
+        >
+          {m === "all" ? "All" : m === "books" ? "Books" : "Games"}
+        </button>
+      ))}
+    </div>
+  );
+
   if (isLoading || !notesLoaded) {
     return <div className="irm-loading"><div className="irm-spinner" /></div>;
   }
@@ -478,11 +503,31 @@ export default function Graph() {
       <div className="irm-page-head">
         <div>
           <h1 className="irm-page-title">Reading map</h1>
-          <p className="irm-page-sub">A network of interconnected authors, books, notes, and quotes.</p>
+          <p className="irm-page-sub">
+            {viewMode === "semantic"
+              ? "Your notes placed by meaning — nearby notes say similar things, across books and games."
+              : "A network of interconnected authors, books, notes, and quotes."}
+          </p>
+        </div>
+        <div className="irm-mediaswitch" role="tablist" style={{ marginTop: 0 }}>
+          {(["network", "semantic"] as const).map((v) => (
+            <button
+              key={v}
+              role="tab"
+              aria-selected={viewMode === v}
+              className={`irm-mediaswitch__btn${viewMode === v ? " is-active" : ""}`}
+              onClick={() => setParam("view", v === "network" ? null : v)}
+            >
+              {v === "network" ? "Network" : "Semantic"}
+            </button>
+          ))}
         </div>
       </div>
+      {viewMode === "semantic" && <SemanticMap media={media} controls={mediaSwitch} />}
+      {/* Kept mounted while hidden so its zoom/resize listeners survive mode switches. */}
       <div
         className="irm-graph__canvas"
+        style={viewMode === "semantic" ? { display: "none" } : undefined}
         ref={wrapRef}
         onPointerDown={onBgPointerDown}
         onPointerMove={onPointerMove}
@@ -548,19 +593,7 @@ export default function Graph() {
 
           {/* Books/Games switch + legend filters */}
           <div className="irm-graph__controls">
-          <div className="irm-mediaswitch" role="tablist">
-            {(["all", "books", "games"] as Media[]).map((m) => (
-              <button
-                key={m}
-                role="tab"
-                aria-selected={media === m}
-                className={`irm-mediaswitch__btn${media === m ? " is-active" : ""}`}
-                onClick={() => setMedia(m)}
-              >
-                {m === "all" ? "All" : m === "books" ? "Books" : "Games"}
-              </button>
-            ))}
-          </div>
+          {mediaSwitch}
           <div className="irm-graph__legend">
             {shownTypes.map((t) => (
               <button

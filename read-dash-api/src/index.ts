@@ -13,6 +13,8 @@ import ocrRouter from './routes/ocr';
 import steamRouter from './routes/steam';
 import themesRouter from './routes/themes';
 import { syncAllUsers, SYNC_INTERVAL_MS } from './lib/steam';
+import semanticRouter from './routes/semantic';
+import { indexedCount, reindex } from './lib/semantic';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -159,6 +161,7 @@ app.use('/api/goals', goalsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/steam', steamRouter);
 app.use('/api/themes', themesRouter);
+app.use('/api/semantic', semanticRouter);
 
 // Error handler - include CORS headers even on errors
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -197,4 +200,19 @@ app.listen(Number(PORT), '0.0.0.0', () => {
 if (isProduction && process.env.STEAM_API_KEY) {
   setTimeout(() => void syncAllUsers(), 60 * 1000);
   setInterval(() => void syncAllUsers(), SYNC_INTERVAL_MS);
+}
+
+// Semantic index: backfill once when Qdrant has nothing yet (first deploy or a
+// wiped collection). Also warms the embedding model so the first note save is fast.
+if (isProduction) {
+  setTimeout(async () => {
+    try {
+      if ((await indexedCount()) === 0) {
+        const n = await reindex();
+        console.log(`[semantic] backfilled ${n} notes`);
+      }
+    } catch (e) {
+      console.error('[semantic] backfill failed:', e instanceof Error ? e.message : e);
+    }
+  }, 5000);
 }

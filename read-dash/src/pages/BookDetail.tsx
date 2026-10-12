@@ -16,6 +16,7 @@ import { downloadBookMarkdown } from "@/lib/export";
 import { STATUS_ORDER, statusOptionLabel, formatHours, playMinutes } from "@/lib/media";
 import { GamePlaytime } from "@/components/design/GamePlaytime";
 import { ThemePicker } from "@/components/design/ThemePicker";
+import { RelatedNotes } from "@/components/design/RelatedNotes";
 import ReactMarkdown from "react-markdown";
 
 const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
@@ -1104,6 +1105,7 @@ export default function BookDetail() {
                               ))}
                             </div>
                           )}
+                          {n.text.trim().length >= 40 && <RelatedNotes noteId={n.id} />}
                         </>
                       )}
                     </div>

@@ -12,7 +12,7 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 8211
     },
-    max_memory_restart: '500M',
+    max_memory_restart: '1200M', // local embedding model (semantic map) needs ~500MB on top
     log_date_format: 'YYYY-MM-DD HH:mm:ss',
     error_file: './logs/error.log',
     out_file: './logs/out.log',

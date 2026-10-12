@@ -1,6 +1,12 @@
 import { Router, Response } from 'express';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { indexNote, removeNote } from '../lib/semantic';
+
+// Keep the semantic index in sync without slowing down the request.
+function syncSemantic(fn: () => Promise<void>) {
+  fn().catch((e) => console.error('[semantic] index sync failed:', e instanceof Error ? e.message : e));
+}
 import { NoteType } from '../types';
 
 const router = Router();
@@ -134,6 +140,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       Boolean(isSpoiler), normalizeImages(images), normalizeTags(tags),
     ]);
     await setNoteThemes(result.rows[0].id, themes);
+    syncSemantic(() => indexNote(result.rows[0].id));
     res.status(201).json(await fetchNote(result.rows[0].id));
   } catch (error) {
     console.error('Error creating note:', error);
@@ -165,6 +172,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       return;
     }
     await setNoteThemes(id, themes);
+    syncSemantic(() => indexNote(id));
     res.json(await fetchNote(id));
   } catch (error) {
     console.error('Error updating note:', error);
@@ -184,6 +192,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
       res.status(404).json({ error: 'Note not found' });
       return;
     }
+    syncSemantic(() => removeNote(id, req.userId));
     res.json({ message: 'Note deleted' });
   } catch (error) {
     console.error('Error deleting note:', error);
