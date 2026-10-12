@@ -143,7 +143,7 @@ export function SteamDialog({ open, onClose }: Props) {
               </button>
               {status.steamId && (
                 <button className="irm-btn irm-btn--ghost" onClick={handleSync} disabled={!!busy}>
-                  {busy === "sync" ? "Syncing…" : "↻ Sync playtime"}
+                  {busy === "sync" ? "Syncing…" : "Sync playtime"}
                 </button>
               )}
             </div>

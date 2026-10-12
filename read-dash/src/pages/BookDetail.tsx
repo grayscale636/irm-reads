@@ -516,7 +516,7 @@ export default function BookDetail() {
             {isGame && (
               <div className="irm-detail__metaitem">
                 <span className="irm-field__label">Type</span>
-                <span className="irm-mono irm-detail__metaval">🎮 Game</span>
+                <span className="irm-mono irm-detail__metaval">Game</span>
               </div>
             )}
             {platform && (
@@ -814,7 +814,7 @@ export default function BookDetail() {
                         checked={noteSpoiler}
                         onChange={(e) => setNoteSpoiler(e.target.checked)}
                       />
-                      🚫 Spoiler
+                      Spoiler
                     </label>
                     <input
                       ref={noteImageInputRef}
@@ -833,7 +833,7 @@ export default function BookDetail() {
                       onClick={() => noteImageInputRef.current?.click()}
                       disabled={noteUploading}
                     >
-                      {noteUploading ? "Uploading…" : "🖼️ Attach image"}
+                      {noteUploading ? "Uploading…" : "Attach image"}
                     </button>
                   </div>
                   {noteImages.length > 0 && (
@@ -899,10 +899,10 @@ export default function BookDetail() {
                             <span className="irm-note__page irm-mono">p.{n.pageRef}</span>
                           ) : null}
                           {n.ref ? (
-                            <span className="irm-note__page irm-mono">📍 {n.ref}</span>
+                            <span className="irm-note__page irm-mono">{n.ref}</span>
                           ) : null}
                           {n.isSpoiler ? (
-                            <span className={`irm-pill irm-pill--question`}>🚫 Spoiler</span>
+                            <span className={`irm-pill irm-pill--question`}>Spoiler</span>
                           ) : null}
                         </div>
                         <div className="irm-note__actions">
@@ -963,7 +963,7 @@ export default function BookDetail() {
                                 checked={editSpoiler}
                                 onChange={(e) => setEditSpoiler(e.target.checked)}
                               />
-                              🚫 Spoiler
+                              Spoiler
                             </label>
                             <input
                               type="file"
@@ -982,7 +982,7 @@ export default function BookDetail() {
                               onClick={() => document.getElementById(`edit-note-img-${n.id}`)?.click()}
                               disabled={noteUploading}
                             >
-                              {noteUploading ? "Uploading…" : "🖼️ Add image"}
+                              {noteUploading ? "Uploading…" : "Add image"}
                             </button>
                           </div>
                           {editImages.length > 0 && (
@@ -1020,7 +1020,7 @@ export default function BookDetail() {
                             });
                             return n.isSpoiler ? (
                               <button type="button" className="irm-btn irm-btn--ghost" style={{ marginBottom: 6 }} onClick={toggle}>
-                                {hidden ? "👁 Show spoiler" : "🙈 Hide spoiler"}
+                                {hidden ? "Show spoiler" : "Hide spoiler"}
                               </button>
                             ) : null;
                           })()}
@@ -1239,8 +1239,8 @@ export default function BookDetail() {
                       {unit === "page"
                         ? (log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : `p.${log.pagesRead}`)
                         : `${log.startPage} → ${log.endPage}${unit === "percent" ? "%" : ""}`}
-                      {log.checkpoint ? <span style={{ marginLeft: 8, opacity: 0.7 }}>📍 {log.checkpoint}</span> : null}
-                      {log.durationMinutes ? <span style={{ marginLeft: 8, opacity: 0.7 }}>⏱ {log.durationMinutes}m</span> : null}
+                      {log.checkpoint ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {log.checkpoint}</span> : null}
+                      {log.durationMinutes ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {log.durationMinutes} min</span> : null}
                     </div>
                     <div className="irm-history__pages">
                       <span className="irm-mono">{log.pagesRead}</span>

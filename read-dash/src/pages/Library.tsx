@@ -145,7 +145,7 @@ export default function Library() {
               className={`irm-mediaswitch__btn${!isGames ? " is-active" : ""}`}
               onClick={() => setMedia("books")}
             >
-              📚 Books <span className="irm-mono">{allBooks.length - gameCount}</span>
+              Books <span className="irm-mono">{allBooks.length - gameCount}</span>
             </button>
             <button
               role="tab"
@@ -153,7 +153,7 @@ export default function Library() {
               className={`irm-mediaswitch__btn${isGames ? " is-active" : ""}`}
               onClick={() => setMedia("games")}
             >
-              🎮 Games <span className="irm-mono">{gameCount}</span>
+              Games <span className="irm-mono">{gameCount}</span>
             </button>
           </div>
         </div>
@@ -179,7 +179,7 @@ export default function Library() {
           </label>
           {isGames && (
             <button className="irm-btn irm-btn--ghost" onClick={() => setSteamOpen(true)}>
-              🎮 Steam
+              Steam
             </button>
           )}
           <button className="irm-btn irm-btn--primary" onClick={() => openAddBookDialog(isGames ? "game" : "book")}>
@@ -224,7 +224,7 @@ export default function Library() {
           {!searchQuery && (
             isGames ? (
               <button className="irm-btn irm-btn--ghost" onClick={() => setSteamOpen(true)}>
-                🎮 Import from Steam
+                Import from Steam
               </button>
             ) : (
               <button className="irm-btn irm-btn--ghost" onClick={() => openAddBookDialog("book")}>

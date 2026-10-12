@@ -77,7 +77,7 @@ export function UserMenu({ user, onLogout }: Props) {
             {exporting ? "Preparing backup…" : "Export backup (JSON)"}
           </button>
           <button className="irm-usermenu__item" onClick={() => { setOpen(false); setSteamOpen(true); }}>
-            <span style={{ width: 14, textAlign: "center" }}>🎮</span>
+            <span style={{ width: 14 }} />
             Steam games
           </button>
           <button className="irm-usermenu__item" onClick={onLogout}>
