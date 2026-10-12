@@ -42,6 +42,8 @@ export interface ReadingLogData {
   checkpoint?: string | null;
 }
 
+export const isBook = (b: Pick<BookData, "mediaType">) => b.mediaType !== "game";
+
 // Optional session metadata (mostly for games): play time + where you stopped.
 export interface SessionExtra {
   durationMinutes?: number | null;
@@ -247,22 +249,24 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     setReadingLogs((prev) => prev.filter((log) => log.id !== id));
   };
 
-  // Calculate stats from actual book data
-  const completedBooks = books.filter((b) => b.status === "completed");
+  // Reading stats count books only — game hours shouldn't inflate pages/streaks/goals.
+  const readingBooks = books.filter(isBook);
+  const readingBookIds = new Set(readingBooks.map((b) => b.id));
+  const completedBooks = readingBooks.filter((b) => b.status === "completed");
   const ratedBooks = completedBooks.filter((b) => b.rating > 0);
   
   const stats = {
     booksRead: completedBooks.length,
-    pagesRead: books.reduce((sum, b) => sum + b.pagesRead, 0),
-    currentStreak: calculateStreak(readingLogs),
+    pagesRead: readingBooks.reduce((sum, b) => sum + b.pagesRead, 0),
+    currentStreak: calculateStreak(readingLogs.filter((l) => readingBookIds.has(l.bookId))),
     avgRating: ratedBooks.length > 0 
       ? ratedBooks.reduce((sum, b) => sum + b.rating, 0) / ratedBooks.length 
       : 0,
-    totalBooks: books.length,
-    booksReading: books.filter((b) => b.status === "reading").length,
-    booksWantToRead: books.filter((b) => b.status === "want-to-read").length,
-    booksPaused: books.filter((b) => b.status === "paused").length,
-    booksDnf: books.filter((b) => b.status === "dnf").length,
+    totalBooks: readingBooks.length,
+    booksReading: readingBooks.filter((b) => b.status === "reading").length,
+    booksWantToRead: readingBooks.filter((b) => b.status === "want-to-read").length,
+    booksPaused: readingBooks.filter((b) => b.status === "paused").length,
+    booksDnf: readingBooks.filter((b) => b.status === "dnf").length,
   };
 
   return (

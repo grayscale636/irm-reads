@@ -3,6 +3,7 @@ import type { User } from "@/contexts/AuthContext";
 import { useTheme, type Theme } from "@/hooks/use-theme";
 import { downloadBackup } from "@/lib/export";
 import { Icon } from "./Icons";
+import { SteamDialog } from "./SteamDialog";
 
 interface Props {
   user: User;
@@ -18,6 +19,7 @@ const THEME_LABELS: Array<{ value: Theme; label: string }> = [
 export function UserMenu({ user, onLogout }: Props) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [steamOpen, setSteamOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
 
@@ -74,12 +76,17 @@ export function UserMenu({ user, onLogout }: Props) {
             <Icon.Pages size={14} />
             {exporting ? "Preparing backup…" : "Export backup (JSON)"}
           </button>
+          <button className="irm-usermenu__item" onClick={() => { setOpen(false); setSteamOpen(true); }}>
+            <span style={{ width: 14, textAlign: "center" }}>🎮</span>
+            Steam games
+          </button>
           <button className="irm-usermenu__item" onClick={onLogout}>
             <Icon.Logout size={14} />
             Sign out
           </button>
         </div>
       )}
+      <SteamDialog open={steamOpen} onClose={() => setSteamOpen(false)} />
     </div>
   );
 }

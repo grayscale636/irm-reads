@@ -19,6 +19,7 @@ interface Props {
 export function LibraryCard({ book, onClick }: Props) {
   const total = book.totalPages || 1;
   const pct = Math.round((book.pagesRead / total) * 100);
+  const unitWord = { hour: "hours", chapter: "chapters", percent: "%", page: "pages" }[book.progressUnit || "page"];
 
   return (
     <button type="button" className="irm-libcard" onClick={onClick}>
@@ -50,7 +51,7 @@ export function LibraryCard({ book, onClick }: Props) {
         {book.status === "completed" && (
           <div className="irm-libcard__progress">
             <div className="irm-libcard__progress-row">
-              <span className="irm-mono">{book.totalPages} pages</span>
+              <span className="irm-mono">{book.totalPages} {unitWord}</span>
               <span className="irm-mono">100%</span>
             </div>
             <ProgressBar value={1} max={1} height={3} />
@@ -59,7 +60,7 @@ export function LibraryCard({ book, onClick }: Props) {
         {book.status === "want-to-read" && (
           <div className="irm-libcard__progress">
             <div className="irm-libcard__progress-row">
-              <span className="irm-mono">{book.totalPages} pages</span>
+              <span className="irm-mono">{book.totalPages} {unitWord}</span>
               <span className="irm-libcard__queued">queued</span>
             </div>
             <div className="irm-progress" style={{ height: 3 }}>

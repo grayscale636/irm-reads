@@ -7,7 +7,7 @@ const router = Router();
 
 // Keep status ↔ progress ↔ finished_at consistent no matter what the client sent:
 // completed = 100% with a finish date; reading/paused/want-to-read have none.
-async function normalizeBookStatus(id: string, userId: string | undefined): Promise<void> {
+export async function normalizeBookStatus(id: string, userId: string | undefined): Promise<void> {
   await pool.query(`
     UPDATE books SET
       pages_read  = CASE WHEN status = 'completed' THEN total_pages ELSE pages_read END,

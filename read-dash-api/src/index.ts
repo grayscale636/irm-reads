@@ -10,6 +10,8 @@ import notesRouter from './routes/notes';
 import goalsRouter from './routes/goals';
 import aiRouter from './routes/ai';
 import ocrRouter from './routes/ocr';
+import steamRouter from './routes/steam';
+import { syncAllUsers } from './lib/steam';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -154,6 +156,7 @@ app.use('/api/reading-logs', readingLogsRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/goals', goalsRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/steam', steamRouter);
 
 // Error handler - include CORS headers even on errors
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -185,3 +188,12 @@ app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 ReadDash API running on 0.0.0.0:${PORT} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
   console.log(`   Allowed origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'any (dev mode)'}`);
 });
+
+// Steam playtime → session logs. Each sync's playtime delta becomes one session,
+// so this interval is the session granularity. Production only, to avoid
+// dev instances double-logging against the same DB.
+if (isProduction && process.env.STEAM_API_KEY) {
+  const STEAM_SYNC_MS = 30 * 60 * 1000;
+  setTimeout(() => void syncAllUsers(), 60 * 1000);
+  setInterval(() => void syncAllUsers(), STEAM_SYNC_MS);
+}

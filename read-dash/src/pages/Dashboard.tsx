@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useBooks } from "@/contexts/BooksContext";
+import { useBooks, isBook } from "@/contexts/BooksContext";
 import type { OutletCtx } from "@/layouts/AppLayout";
 import { Icon } from "@/components/design/Icons";
 import { StatTile } from "@/components/design/StatTile";
@@ -22,7 +22,13 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { today } = useOutletContext<OutletCtx>();
-  const { books, readingLogs, stats, isLoading, addReadingLog, deleteReadingLog, updateBook } = useBooks();
+  const { books: allBooks, readingLogs: allLogs, stats, isLoading, addReadingLog, deleteReadingLog, updateBook } = useBooks();
+  // The reading dashboard is about books; games live in the library with their own units.
+  const books = useMemo(() => allBooks.filter(isBook), [allBooks]);
+  const readingLogs = useMemo(() => {
+    const ids = new Set(books.map((b) => b.id));
+    return allLogs.filter((l) => ids.has(l.bookId));
+  }, [allLogs, books]);
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [logDialog, setLogDialog] = useState<{ open: boolean; bookId: string | null }>({ open: false, bookId: null });

@@ -313,3 +313,43 @@ export async function getOcrJob(jobId: string): Promise<OcrJob> {
   if (!response.ok) throw new Error('Failed to fetch OCR job');
   return response.json();
 }
+
+// ============ STEAM API ============
+
+export interface SteamStatus {
+  configured: boolean;
+  steamId: string | null;
+  name: string | null;
+}
+
+export interface SteamGame {
+  appid: number;
+  name: string;
+  playtimeMinutes: number;
+  lastPlayed: number | null;
+  icon: string | null;
+  /** Shelf entry id when this game is already imported. */
+  bookId: string | null;
+}
+
+export interface SteamImportItem {
+  appid: number;
+  targetHours?: number;
+  status?: Book['status'];
+}
+
+async function steamRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}/steam${path}`, { ...init, headers: getAuthHeaders() });
+  if (response.status === 401) throw new Error('Unauthorized');
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Steam request failed');
+  return data as T;
+}
+
+export const getSteamStatus = () => steamRequest<SteamStatus>('/status');
+export const linkSteam = (profile: string) =>
+  steamRequest<{ steamId: string | null; name: string | null }>('/link', { method: 'PUT', body: JSON.stringify({ profile }) });
+export const getSteamLibrary = () => steamRequest<SteamGame[]>('/library');
+export const importSteamGames = (games: SteamImportItem[]) =>
+  steamRequest<{ created: string[] }>('/import', { method: 'POST', body: JSON.stringify({ games }) });
+export const syncSteam = () => steamRequest<{ updated: number; minutes: number }>('/sync', { method: 'POST' });
