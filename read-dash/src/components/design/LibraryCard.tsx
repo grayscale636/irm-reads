@@ -2,14 +2,8 @@ import type { BookData } from "@/contexts/BooksContext";
 import { BookCover } from "./BookCover";
 import { ProgressBar } from "./ProgressBar";
 import { Icon } from "./Icons";
+import { statusLabel } from "@/lib/media";
 
-const STATUS_LABEL: Record<BookData["status"], string> = {
-  reading: "Reading",
-  completed: "Completed",
-  "want-to-read": "Want to read",
-  paused: "Paused",
-  dnf: "DNF",
-};
 
 interface Props {
   book: BookData;
@@ -26,7 +20,7 @@ export function LibraryCard({ book, onClick }: Props) {
       <BookCover book={book} size="md" />
       <div className="irm-libcard__body">
         <div className="irm-libcard__topline">
-          <span className={`irm-pill irm-pill--${book.status}`}>{STATUS_LABEL[book.status]}</span>
+          <span className={`irm-pill irm-pill--${book.status}`}>{statusLabel(book.status, book.mediaType)}</span>
           {book.status === "completed" && book.rating > 0 && (
             <span className="irm-libcard__rating">
               {[1, 2, 3, 4, 5].map((s) => (

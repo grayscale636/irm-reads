@@ -6,6 +6,7 @@ import {
   type SteamStatus, type SteamGame, type Book,
 } from "@/lib/api";
 import { Icon } from "./Icons";
+import { STATUS_ORDER, statusLabel } from "@/lib/media";
 
 interface Props {
   open: boolean;
@@ -19,7 +20,7 @@ interface Pick {
 
 const TWO_WEEKS = 14 * 24 * 3600;
 
-// Sensible default: recently played → playing, played before → paused, never → backlog.
+// Sensible default: recently played → playing, played before → paused, never → want to play.
 function defaultStatus(g: SteamGame): Book["status"] {
   if (!g.playtimeMinutes) return "want-to-read";
   const now = Date.now() / 1000;
@@ -193,11 +194,9 @@ export function SteamDialog({ open, onClose }: Props) {
                                 value={pick.status}
                                 onChange={(e) => setPicks((p) => ({ ...p, [g.appid]: { ...pick, status: e.target.value as Book["status"] } }))}
                               >
-                                <option value="want-to-read">Backlog</option>
-                                <option value="reading">Playing</option>
-                                <option value="paused">Paused</option>
-                                <option value="completed">Finished</option>
-                                <option value="dnf">Dropped</option>
+                                {STATUS_ORDER.map((s) => (
+                                  <option key={s} value={s}>{statusLabel(s, "game")}</option>
+                                ))}
                               </select>
                               <input
                                 type="number"

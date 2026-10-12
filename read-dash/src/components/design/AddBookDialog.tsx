@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { BookData } from "@/contexts/BooksContext";
 import { Icon } from "./Icons";
 import { StarRating } from "./StarRating";
+import { STATUS_ORDER, statusOptionLabel } from "@/lib/media";
 
 type NewBook = Omit<BookData, "id">;
 
@@ -155,11 +156,9 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
                 value={status}
                 onChange={(e) => setStatus(e.target.value as BookData["status"])}
               >
-                <option value="want-to-read">{mediaType === "game" ? "Backlog" : "Want to read"}</option>
-                <option value="reading">{mediaType === "game" ? "Playing" : "Reading"}</option>
-                <option value="paused">Paused</option>
-                <option value="completed">{mediaType === "game" ? "Finished" : "Completed"}</option>
-                <option value="dnf">DNF (Did not finish)</option>
+                {STATUS_ORDER.map((s) => (
+                  <option key={s} value={s}>{statusOptionLabel(s, mediaType)}</option>
+                ))}
               </select>
             </label>
           </div>

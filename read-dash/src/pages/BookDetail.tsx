@@ -13,6 +13,7 @@ import { uploadToMinio, deleteFromMinio } from "@/lib/minio";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import { downloadBookMarkdown } from "@/lib/export";
+import { STATUS_ORDER, statusOptionLabel } from "@/lib/media";
 import ReactMarkdown from "react-markdown";
 
 const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
@@ -498,11 +499,9 @@ export default function BookDetail() {
                 value={book.status}
                 onChange={(e) => updateStatus(e.target.value as BookData["status"])}
               >
-                <option value="want-to-read">Want to read</option>
-                <option value="reading">Reading</option>
-                <option value="paused">Paused</option>
-                <option value="completed">Completed</option>
-                <option value="dnf">DNF (Did not finish)</option>
+                {STATUS_ORDER.map((s) => (
+                  <option key={s} value={s}>{statusOptionLabel(s, book.mediaType)}</option>
+                ))}
               </select>
             </div>
 
@@ -760,7 +759,7 @@ export default function BookDetail() {
                     onChange={(e) => setNoteInput(e.target.value)}
                     placeholder={
                       book.status === "want-to-read"
-                        ? "Why do you want to read this?"
+                        ? `Why do you want to ${isGame ? "play" : "read"} this?`
                         : book.status === "paused"
                         ? "Why did you pause?"
                         : book.status === "dnf"
@@ -1272,6 +1271,8 @@ export default function BookDetail() {
           bookTitle={book.title}
           bookAuthor={book.author}
           status={book.status}
+          isGame={isGame}
+          unitShort={isGame ? unitLabel(unit, true) : "hal"}
           pagesRead={book.pagesRead}
           totalPages={book.totalPages}
           onClose={() => setShowAI(false)}

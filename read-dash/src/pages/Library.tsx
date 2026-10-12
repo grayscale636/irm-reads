@@ -5,30 +5,19 @@ import type { OutletCtx } from "@/layouts/AppLayout";
 import { Icon } from "@/components/design/Icons";
 import { LibraryCard } from "@/components/design/LibraryCard";
 import { SteamDialog } from "@/components/design/SteamDialog";
+import { statusLabel } from "@/lib/media";
 
 type Filter = "all" | "reading" | "completed" | "want-to-read" | "paused" | "dnf";
 type SortKey = "recent" | "title" | "author" | "rating" | "progress" | "pages";
 type Media = "books" | "games";
 
+const TAB_ORDER: Array<Exclude<Filter, "all">> = ["reading", "paused", "completed", "want-to-read", "dnf"];
+
 // Same statuses, different words per shelf.
-const TABS: Record<Media, Array<{ id: Filter; label: string }>> = {
-  books: [
-    { id: "all", label: "All" },
-    { id: "reading", label: "Reading" },
-    { id: "paused", label: "Paused" },
-    { id: "completed", label: "Completed" },
-    { id: "want-to-read", label: "Want to read" },
-    { id: "dnf", label: "DNF" },
-  ],
-  games: [
-    { id: "all", label: "All" },
-    { id: "reading", label: "Playing" },
-    { id: "paused", label: "Paused" },
-    { id: "completed", label: "Finished" },
-    { id: "want-to-read", label: "Backlog" },
-    { id: "dnf", label: "Dropped" },
-  ],
-};
+const tabsFor = (media: Media): Array<{ id: Filter; label: string }> => [
+  { id: "all", label: "All" },
+  ...TAB_ORDER.map((id) => ({ id, label: statusLabel(id, media === "games" ? "game" : "book") })),
+];
 
 const SORTS: Array<{ id: SortKey; label: string; game?: string }> = [
   { id: "recent", label: "Recently active" },
@@ -189,7 +178,7 @@ export default function Library() {
       </div>
 
       <div className="irm-tabs">
-        {TABS[media].map((tab) => (
+        {tabsFor(media).map((tab) => (
           <button
             key={tab.id}
             className={`irm-tab ${filter === tab.id ? "is-active" : ""}`}
