@@ -186,6 +186,7 @@ export default function BookDetail() {
   const unit = book.progressUnit || "page";
   const isGame = book.mediaType === "game";
   const platform = (book.metadata && typeof book.metadata === "object" && (book.metadata as any).platform) as string | undefined;
+  const difficulty = (book.metadata as Record<string, unknown> | undefined)?.difficulty as string | undefined;
   const bookLogs = readingLogs
     .filter((l) => l.bookId === book.id)
     .slice()
@@ -524,6 +525,12 @@ export default function BookDetail() {
               <div className="irm-detail__metaitem">
                 <span className="irm-field__label">Platform</span>
                 <span className="irm-mono irm-detail__metaval">{platform}</span>
+              </div>
+            )}
+            {difficulty && (
+              <div className="irm-detail__metaitem">
+                <span className="irm-field__label">Difficulty</span>
+                <span className="irm-mono irm-detail__metaval">{difficulty}</span>
               </div>
             )}
 
