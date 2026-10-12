@@ -140,6 +140,8 @@ export interface BookNote {
   /** Image URLs (MinIO / any) attached to this note. */
   images: string[];
   tags: string[];
+  /** Theme slugs (see /api/themes). */
+  themes?: string[];
   createdAt: string;
 }
 
@@ -150,6 +152,7 @@ export interface NoteFields {
   isSpoiler?: boolean;
   images?: string[];
   tags?: string[];
+  themes?: string[];
 }
 
 export interface JournalNote extends BookNote {
@@ -352,3 +355,44 @@ export const getSteamLibrary = () => steamRequest<SteamGame[]>('/library');
 export const importSteamGames = (games: SteamImportItem[]) =>
   steamRequest<{ created: string[] }>('/import', { method: 'POST', body: JSON.stringify({ games }) });
 export const syncSteam = () => steamRequest<{ updated: number; minutes: number }>('/sync', { method: 'POST' });
+
+// ============ THEMES API ============
+
+export interface Theme {
+  slug: string;
+  name: string;
+  description: string | null;
+  noteCount: number;
+  workCount: number;
+}
+
+export interface ThemeNote extends BookNote {
+  bookTitle: string;
+  bookAuthor: string;
+  bookCover: string | null;
+  mediaType: MediaType;
+  bookStatus: Book['status'];
+}
+
+// The vocabulary rarely changes; share one request across components.
+let themesCache: Promise<Theme[]> | null = null;
+
+export function getThemes(fresh = false): Promise<Theme[]> {
+  if (!themesCache || fresh) {
+    themesCache = fetch(`${API_BASE}/themes`, { headers: getAuthHeaders() }).then(async (r) => {
+      if (!r.ok) {
+        themesCache = null;
+        throw new Error('Failed to load themes');
+      }
+      return r.json();
+    });
+  }
+  return themesCache;
+}
+
+export async function getThemeNotes(slug: string): Promise<ThemeNote[]> {
+  const response = await fetch(`${API_BASE}/themes/${encodeURIComponent(slug)}`, { headers: getAuthHeaders() });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to load theme');
+  return response.json();
+}

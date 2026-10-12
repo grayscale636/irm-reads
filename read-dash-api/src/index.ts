@@ -11,6 +11,7 @@ import goalsRouter from './routes/goals';
 import aiRouter from './routes/ai';
 import ocrRouter from './routes/ocr';
 import steamRouter from './routes/steam';
+import themesRouter from './routes/themes';
 import { syncAllUsers, SYNC_INTERVAL_MS } from './lib/steam';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
@@ -157,6 +158,7 @@ app.use('/api/notes', notesRouter);
 app.use('/api/goals', goalsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/steam', steamRouter);
+app.use('/api/themes', themesRouter);
 
 // Error handler - include CORS headers even on errors
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {

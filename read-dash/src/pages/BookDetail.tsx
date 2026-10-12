@@ -8,13 +8,14 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, startOcrImport, getOcrJob, normalizeQuote, type BookNote, type NoteType, type QuoteItem, type ProgressUnit } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, startOcrImport, getOcrJob, normalizeQuote, type BookNote, type NoteType, type QuoteItem, type ProgressUnit, getThemes, type Theme } from "@/lib/api";
 import { uploadToMinio, deleteFromMinio } from "@/lib/minio";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import { downloadBookMarkdown } from "@/lib/export";
 import { STATUS_ORDER, statusOptionLabel, formatHours, playMinutes } from "@/lib/media";
 import { GamePlaytime } from "@/components/design/GamePlaytime";
+import { ThemePicker } from "@/components/design/ThemePicker";
 import ReactMarkdown from "react-markdown";
 
 const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
@@ -114,6 +115,9 @@ export default function BookDetail() {
   const [editTags, setEditTags] = useState("");
   const [editSpoiler, setEditSpoiler] = useState(false);
   const [editImages, setEditImages] = useState<string[]>([]);
+  const [allThemes, setAllThemes] = useState<Theme[]>([]);
+  const [noteThemes, setNoteThemes] = useState<string[]>([]);
+  const [editThemes, setEditThemes] = useState<string[]>([]);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
   const [quotePage, setQuotePage] = useState("");
@@ -141,6 +145,10 @@ export default function BookDetail() {
   const quotesColl = useCollapsible("book-quotes", false);
   const historyColl = useCollapsible("book-history", false);
   const paceColl = useCollapsible("book-pace", true);
+
+  useEffect(() => {
+    getThemes().then(setAllThemes).catch(() => setAllThemes([]));
+  }, []);
 
   const loadNotes = useCallback(async () => {
     if (!book?.id) return;
@@ -246,6 +254,7 @@ export default function BookDetail() {
     setNoteTags("");
     setNoteSpoiler(false);
     setNoteImages([]);
+    setNoteThemes([]);
     setShowNoteForm(true);
   };
 
@@ -301,6 +310,7 @@ export default function BookDetail() {
         isSpoiler: noteSpoiler,
         images: noteImages,
         tags: parseTags(noteTags),
+        themes: noteThemes,
       });
       setNoteInput("");
       setNoteTags("");
@@ -368,6 +378,7 @@ export default function BookDetail() {
     setEditTags((note.tags || []).join(", "));
     setEditSpoiler(note.isSpoiler || false);
     setEditImages(note.images || []);
+    setEditThemes(note.themes || []);
   };
 
   const cancelEditNote = () => {
@@ -384,6 +395,7 @@ export default function BookDetail() {
       isSpoiler: editSpoiler,
       images: editImages,
       tags: parseTags(editTags),
+      themes: editThemes,
     };
     try {
       const updated = await updateBookNote(editingNoteId, editNoteText.trim(), fields);
@@ -866,6 +878,7 @@ export default function BookDetail() {
                       {noteUploading ? "Uploading…" : "Attach image"}
                     </button>
                   </div>
+                  <ThemePicker themes={allThemes} value={noteThemes} onChange={setNoteThemes} />
                   {noteImages.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                       {noteImages.map((url) => (
@@ -1015,6 +1028,7 @@ export default function BookDetail() {
                               {noteUploading ? "Uploading…" : "Add image"}
                             </button>
                           </div>
+                          <ThemePicker themes={allThemes} value={editThemes} onChange={setEditThemes} />
                           {editImages.length > 0 && (
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                               {editImages.map((url) => (
@@ -1067,6 +1081,21 @@ export default function BookDetail() {
                             </div>
                           )}
                           </>
+                          )}
+                          {n.themes && n.themes.length > 0 && (
+                            <div className="irm-note__tags">
+                              {n.themes.map((slug) => (
+                                <button
+                                  key={slug}
+                                  type="button"
+                                  className="irm-themes__chip"
+                                  style={{ padding: "2px 10px", fontSize: 12 }}
+                                  onClick={() => navigate(`/themes?t=${slug}`)}
+                                >
+                                  {allThemes.find((t) => t.slug === slug)?.name || slug}
+                                </button>
+                              ))}
+                            </div>
                           )}
                           {n.tags && n.tags.length > 0 && (
                             <div className="irm-note__tags">

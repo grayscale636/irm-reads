@@ -53,8 +53,29 @@ const NOTE_COLS = `
   id, book_id as "bookId", text,
   note_type as "noteType", page_ref as "pageRef", ref,
   is_spoiler as "isSpoiler", images, tags,
+  ARRAY(SELECT t.theme_slug FROM note_themes t WHERE t.note_id = book_notes.id ORDER BY t.theme_slug) AS themes,
   created_at::text as "createdAt"
 `;
+
+// Replace a note's themes. Unknown slugs are ignored (FK-safe via the themes join).
+// `undefined` means "client didn't send themes" → leave them untouched.
+async function setNoteThemes(noteId: string, themes: unknown): Promise<void> {
+  if (!Array.isArray(themes)) return;
+  const slugs = [...new Set(themes.map((t) => String(t).trim()).filter(Boolean))];
+  await pool.query('DELETE FROM note_themes WHERE note_id = $1', [noteId]);
+  if (slugs.length) {
+    await pool.query(
+      `INSERT INTO note_themes (note_id, theme_slug)
+       SELECT $1, slug FROM themes WHERE slug = ANY($2::text[])`,
+      [noteId, slugs]
+    );
+  }
+}
+
+async function fetchNote(id: string) {
+  const r = await pool.query(`SELECT ${NOTE_COLS} FROM book_notes WHERE id = $1`, [id]);
+  return r.rows[0];
+}
 
 // Get all notes for current user, joined with book info (for the Journal page)
 router.get('/', async (req: AuthRequest, res: Response) => {
@@ -63,6 +84,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       SELECT n.id, n.book_id as "bookId", n.text,
              n.note_type as "noteType", n.page_ref as "pageRef", n.ref,
              n.is_spoiler as "isSpoiler", n.images, n.tags,
+             ARRAY(SELECT t.theme_slug FROM note_themes t WHERE t.note_id = n.id ORDER BY t.theme_slug) AS themes,
              n.created_at::text as "createdAt",
              b.title as "bookTitle", b.author as "bookAuthor"
       FROM book_notes n
@@ -97,7 +119,7 @@ router.get('/book/:bookId', async (req: AuthRequest, res: Response) => {
 // Add note
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { bookId, text, noteType, pageRef, ref, isSpoiler, images, tags } = req.body;
+    const { bookId, text, noteType, pageRef, ref, isSpoiler, images, tags, themes } = req.body;
     if (!bookId || (!text?.trim() && normalizeImages(images).length === 0)) {
       res.status(400).json({ error: 'bookId and text (or images) are required' });
       return;
@@ -111,7 +133,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       normalizeType(noteType), normalizePageRef(pageRef), normalizeRef(ref),
       Boolean(isSpoiler), normalizeImages(images), normalizeTags(tags),
     ]);
-    res.status(201).json(result.rows[0]);
+    await setNoteThemes(result.rows[0].id, themes);
+    res.status(201).json(await fetchNote(result.rows[0].id));
   } catch (error) {
     console.error('Error creating note:', error);
     res.status(500).json({ error: 'Failed to create note' });
@@ -122,7 +145,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { text, noteType, pageRef, ref, isSpoiler, images, tags } = req.body;
+    const { text, noteType, pageRef, ref, isSpoiler, images, tags, themes } = req.body;
     if (!text?.trim() && normalizeImages(images).length === 0) {
       res.status(400).json({ error: 'text or images are required' });
       return;
@@ -141,7 +164,8 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       res.status(404).json({ error: 'Note not found' });
       return;
     }
-    res.json(result.rows[0]);
+    await setNoteThemes(id, themes);
+    res.json(await fetchNote(id));
   } catch (error) {
     console.error('Error updating note:', error);
     res.status(500).json({ error: 'Failed to update note' });

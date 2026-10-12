@@ -6,6 +6,7 @@ import AppLayout from "@/layouts/AppLayout";
 import Library from "./pages/Library";
 import Dashboard from "./pages/Dashboard";
 import Journal from "./pages/Journal";
+import Themes from "./pages/Themes";
 import BookDetail from "./pages/BookDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route path="/" element={<Library />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/journal" element={<Journal />} />
+        <Route path="/themes" element={<Themes />} />
         <Route path="/graph" element={<Suspense fallback={<Loader />}><Graph /></Suspense>} />
         <Route path="/book/:id" element={<BookDetail />} />
       </Route>
