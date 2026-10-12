@@ -8,7 +8,8 @@ import { ProgressBar } from "@/components/design/ProgressBar";
 import { StarRating } from "@/components/design/StarRating";
 import { PaceChart } from "@/components/design/PaceChart";
 import { useCollapsible } from "@/hooks/use-collapsible";
-import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, startOcrImport, getOcrJob, normalizeQuote, type BookNote, type NoteType, type QuoteItem } from "@/lib/api";
+import { getBookNotes, addBookNote, updateBookNote, deleteBookNote, generateAIDraft, startOcrImport, getOcrJob, normalizeQuote, type BookNote, type NoteType, type QuoteItem, type ProgressUnit } from "@/lib/api";
+import { uploadToMinio, deleteFromMinio } from "@/lib/minio";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import { downloadBookMarkdown } from "@/lib/export";
@@ -19,6 +20,17 @@ const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
   { value: "reflection", label: "Reflection" },
   { value: "question", label: "Question" },
 ];
+
+// Human label for a progress unit (book pages vs game hours/chapters/percent).
+function unitLabel(unit?: ProgressUnit, plural = false): string {
+  switch (unit) {
+    case "hour": return plural ? "hours" : "hour";
+    case "chapter": return plural ? "chapters" : "chapter";
+    case "percent": return "%";
+    case "page":
+    default: return plural ? "pages" : "page";
+  }
+}
 
 // "theme, aha , character" -> ["theme","aha","character"]
 function parseTags(raw: string): string[] {
@@ -76,18 +88,29 @@ export default function BookDetail() {
 
   const [pagesInput, setPagesInput] = useState<string>("");
   const [logDate, setLogDate] = useState<string>(today);
+  const [sessionMinutes, setSessionMinutes] = useState("");
+  const [sessionCheckpoint, setSessionCheckpoint] = useState("");
+  const [revealedSpoilers, setRevealedSpoilers] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState<BookNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteInput, setNoteInput] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteType, setNoteType] = useState<NoteType>("note");
   const [notePage, setNotePage] = useState("");
+  const [noteRef, setNoteRef] = useState("");
   const [noteTags, setNoteTags] = useState("");
+  const [noteSpoiler, setNoteSpoiler] = useState(false);
+  const [noteImages, setNoteImages] = useState<string[]>([]);
+  const [noteUploading, setNoteUploading] = useState(false);
+  const noteImageInputRef = useRef<HTMLInputElement>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
   const [editNoteType, setEditNoteType] = useState<NoteType>("note");
   const [editPage, setEditPage] = useState("");
+  const [editRef, setEditRef] = useState("");
   const [editTags, setEditTags] = useState("");
+  const [editSpoiler, setEditSpoiler] = useState(false);
+  const [editImages, setEditImages] = useState<string[]>([]);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [quoteInput, setQuoteInput] = useState("");
   const [quotePage, setQuotePage] = useState("");
@@ -157,6 +180,9 @@ export default function BookDetail() {
 
   const total = book.totalPages || 1;
   const pct = Math.round((book.pagesRead / total) * 100);
+  const unit = book.progressUnit || "page";
+  const isGame = book.mediaType === "game";
+  const platform = (book.metadata && typeof book.metadata === "object" && (book.metadata as any).platform) as string | undefined;
   const bookLogs = readingLogs
     .filter((l) => l.bookId === book.id)
     .slice()
@@ -179,7 +205,13 @@ export default function BookDetail() {
     const n = Math.max(0, Math.min(book.totalPages, parseInt(pagesInput, 10) || 0));
     if (n === book.pagesRead) return;
     if (n > book.pagesRead) {
-      await addReadingLog(book.id, book.pagesRead, n, logDate);
+      const mins = parseInt(sessionMinutes, 10);
+      await addReadingLog(book.id, book.pagesRead, n, logDate, {
+        durationMinutes: mins > 0 ? mins : null,
+        checkpoint: sessionCheckpoint.trim() || null,
+      });
+      setSessionMinutes("");
+      setSessionCheckpoint("");
     } else {
       await updateBook(book.id, { pagesRead: n });
     }
@@ -204,8 +236,36 @@ export default function BookDetail() {
   const openNoteForm = () => {
     setNoteType("note");
     setNotePage(book.pagesRead ? String(book.pagesRead) : "");
+    setNoteRef("");
     setNoteTags("");
+    setNoteSpoiler(false);
+    setNoteImages([]);
     setShowNoteForm(true);
+  };
+
+  // Upload an image to MinIO and append its URL to the in-progress note.
+  const handleNoteImage = async (file: File) => {
+    setNoteUploading(true);
+    try {
+      const url = await uploadToMinio(file, "irmreads-notes");
+      setNoteImages((prev) => [...prev, url]);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Gagal upload gambar.");
+    } finally {
+      setNoteUploading(false);
+    }
+  };
+
+  const handleEditImage = async (file: File) => {
+    setNoteUploading(true);
+    try {
+      const url = await uploadToMinio(file, "irmreads-notes");
+      setEditImages((prev) => [...prev, url]);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Gagal upload gambar.");
+    } finally {
+      setNoteUploading(false);
+    }
   };
 
   const generateRecap = async () => {
@@ -226,15 +286,19 @@ export default function BookDetail() {
 
   const addNote = async () => {
     const text = noteInput.trim();
-    if (!text) return;
+    if (!text && noteImages.length === 0) return;
     try {
       await addBookNote(book.id, text, {
         noteType,
         pageRef: notePage ? parseInt(notePage, 10) : null,
+        ref: noteRef.trim() || null,
+        isSpoiler: noteSpoiler,
+        images: noteImages,
         tags: parseTags(noteTags),
       });
       setNoteInput("");
       setNoteTags("");
+      setNoteImages([]);
       setShowNoteForm(false);
       await loadNotes();
     } catch (e) {
@@ -294,7 +358,10 @@ export default function BookDetail() {
     setEditNoteText(note.text);
     setEditNoteType(note.noteType || "note");
     setEditPage(note.pageRef ? String(note.pageRef) : "");
+    setEditRef(note.ref || "");
     setEditTags((note.tags || []).join(", "));
+    setEditSpoiler(note.isSpoiler || false);
+    setEditImages(note.images || []);
   };
 
   const cancelEditNote = () => {
@@ -303,10 +370,13 @@ export default function BookDetail() {
   };
 
   const saveEditNote = async () => {
-    if (!editingNoteId || !editNoteText.trim()) return;
+    if (!editingNoteId) return;
     const fields = {
       noteType: editNoteType,
       pageRef: editPage ? parseInt(editPage, 10) : null,
+      ref: editRef.trim() || null,
+      isSpoiler: editSpoiler,
+      images: editImages,
       tags: parseTags(editTags),
     };
     try {
@@ -434,11 +504,24 @@ export default function BookDetail() {
             </div>
 
             <div className="irm-detail__metaitem">
-              <span className="irm-field__label">Pages</span>
+              <span className="irm-field__label">{isGame ? "Progress" : "Pages"}</span>
               <span className="irm-mono irm-detail__metaval">
-                {book.pagesRead} / {book.totalPages} · {pct}%
+                {unit === "percent" ? `${book.pagesRead}% / ${book.totalPages}%` : `${book.pagesRead} / ${book.totalPages} ${unitLabel(unit, true)}`} · {pct}%
               </span>
             </div>
+
+            {isGame && (
+              <div className="irm-detail__metaitem">
+                <span className="irm-field__label">Type</span>
+                <span className="irm-mono irm-detail__metaval">🎮 Game</span>
+              </div>
+            )}
+            {platform && (
+              <div className="irm-detail__metaitem">
+                <span className="irm-field__label">Platform</span>
+                <span className="irm-mono irm-detail__metaval">{platform}</span>
+              </div>
+            )}
 
             <div className="irm-detail__metaitem">
               <button className="irm-btn irm-btn--ghost" onClick={() => setShowAI((v) => !v)}>
@@ -490,7 +573,7 @@ export default function BookDetail() {
             <div className="irm-detail__pages-row">
               <label className="irm-field">
                 <span className="irm-field__label">
-                  {book.status === "completed" ? "Pages" : "Update pages read"}
+                  {book.status === "completed" ? unitLabel(unit, true) : `Update ${unitLabel(unit, true)} ${isGame ? "played" : "read"}`}
                 </span>
                 <div className="irm-detail__pages-inputs">
                   <input
@@ -527,8 +610,31 @@ export default function BookDetail() {
                       }
                     }}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                    title="Total pages"
+                    title={`Total ${unitLabel(unit, true)}`}
                   />
+                  {book.status !== "completed" && (
+                    <>
+                      <input
+                        type="number"
+                        className="irm-input irm-mono"
+                        style={{ width: 80 }}
+                        value={sessionMinutes}
+                        min={0}
+                        placeholder="min"
+                        onChange={(e) => setSessionMinutes(e.target.value)}
+                        title="Session duration (minutes, optional)"
+                      />
+                      <input
+                        type="text"
+                        className="irm-input"
+                        style={{ minWidth: 140, flex: 1 }}
+                        value={sessionCheckpoint}
+                        placeholder={isGame ? "Checkpoint (e.g. sampai Lambda)" : "Checkpoint (optional)"}
+                        onChange={(e) => setSessionCheckpoint(e.target.value)}
+                        title="Where you stopped this session"
+                      />
+                    </>
+                  )}
                   {book.status !== "completed" && (
                     <button className="irm-btn irm-btn--ghost" onClick={savePages}>
                       <Icon.Check size={13} /> Save
@@ -684,12 +790,66 @@ export default function BookDetail() {
                     <input
                       type="text"
                       className="irm-input"
+                      value={noteRef}
+                      placeholder={isGame ? "Location / chapter" : "Location / chapter (free)"}
+                      onChange={(e) => setNoteRef(e.target.value)}
+                      title="Free-form reference (location, chapter, level…)"
+                    />
+                    <input
+                      type="text"
+                      className="irm-input"
                       value={noteTags}
                       placeholder="Tags (comma separated)"
                       onChange={(e) => setNoteTags(e.target.value)}
                       title="Tags"
                     />
                   </div>
+                  <div className="irm-note__form-meta" style={{ alignItems: "center" }}>
+                    <label className="irm-check" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={noteSpoiler}
+                        onChange={(e) => setNoteSpoiler(e.target.checked)}
+                      />
+                      🚫 Spoiler
+                    </label>
+                    <input
+                      ref={noteImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleNoteImage(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="irm-btn irm-btn--ghost"
+                      onClick={() => noteImageInputRef.current?.click()}
+                      disabled={noteUploading}
+                    >
+                      {noteUploading ? "Uploading…" : "🖼️ Attach image"}
+                    </button>
+                  </div>
+                  {noteImages.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                      {noteImages.map((url) => (
+                        <div key={url} style={{ position: "relative" }}>
+                          <img src={url} alt="attachment" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6 }} />
+                          <button
+                            type="button"
+                            className="irm-logitem__delete"
+                            style={{ position: "absolute", top: -6, right: -6, background: "#dc2626", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center" }}
+                            onClick={() => setNoteImages((prev) => prev.filter((u) => u !== url))}
+                          >
+                            <Icon.X size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="irm-reflect__actions">
                     <button
                       className="irm-btn irm-btn--ghost"
@@ -702,7 +862,7 @@ export default function BookDetail() {
                     </button>
                     <button
                       className="irm-btn irm-btn--primary"
-                      disabled={!noteInput.trim()}
+                      disabled={!noteInput.trim() && noteImages.length === 0}
                       onClick={addNote}
                     >
                       <Icon.Check size={13} /> Save
@@ -734,6 +894,12 @@ export default function BookDetail() {
                           </span>
                           {n.pageRef ? (
                             <span className="irm-note__page irm-mono">p.{n.pageRef}</span>
+                          ) : null}
+                          {n.ref ? (
+                            <span className="irm-note__page irm-mono">📍 {n.ref}</span>
+                          ) : null}
+                          {n.isSpoiler ? (
+                            <span className={`irm-pill irm-pill--question`}>🚫 Spoiler</span>
                           ) : null}
                         </div>
                         <div className="irm-note__actions">
@@ -775,21 +941,100 @@ export default function BookDetail() {
                             <input
                               type="text"
                               className="irm-input"
+                              value={editRef}
+                              placeholder="Location / chapter"
+                              onChange={(e) => setEditRef(e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              className="irm-input"
                               value={editTags}
                               placeholder="Tags (comma separated)"
                               onChange={(e) => setEditTags(e.target.value)}
                             />
                           </div>
+                          <div className="irm-note__form-meta" style={{ alignItems: "center" }}>
+                            <label className="irm-check" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={editSpoiler}
+                                onChange={(e) => setEditSpoiler(e.target.checked)}
+                              />
+                              🚫 Spoiler
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              style={{ display: "none" }}
+                              id={`edit-note-img-${n.id}`}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleEditImage(f);
+                                e.target.value = "";
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="irm-btn irm-btn--ghost"
+                              onClick={() => document.getElementById(`edit-note-img-${n.id}`)?.click()}
+                              disabled={noteUploading}
+                            >
+                              {noteUploading ? "Uploading…" : "🖼️ Add image"}
+                            </button>
+                          </div>
+                          {editImages.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                              {editImages.map((url) => (
+                                <div key={url} style={{ position: "relative" }}>
+                                  <img src={url} alt="attachment" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6 }} />
+                                  <button
+                                    type="button"
+                                    className="irm-logitem__delete"
+                                    style={{ position: "absolute", top: -6, right: -6, background: "#dc2626", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center" }}
+                                    onClick={() => setEditImages((prev) => prev.filter((u) => u !== url))}
+                                  >
+                                    <Icon.X size={11} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <div className="irm-reflect__actions">
                             <button className="irm-btn irm-btn--ghost" onClick={cancelEditNote}>Cancel</button>
-                            <button className="irm-btn irm-btn--primary" disabled={!editNoteText.trim()} onClick={saveEditNote}>
+                            <button className="irm-btn irm-btn--primary" disabled={!editNoteText.trim() && editImages.length === 0} onClick={saveEditNote}>
                               <Icon.Check size={13} /> Save
                             </button>
                           </div>
                         </div>
                       ) : (
                         <>
-                          <p className="irm-note__text">{n.text}</p>
+                          {(() => {
+                            const hidden = n.isSpoiler && !revealedSpoilers.has(n.id);
+                            const toggle = () => setRevealedSpoilers((prev) => {
+                              const next = new Set(prev);
+                              next.has(n.id) ? next.delete(n.id) : next.add(n.id);
+                              return next;
+                            });
+                            return n.isSpoiler ? (
+                              <button type="button" className="irm-btn irm-btn--ghost" style={{ marginBottom: 6 }} onClick={toggle}>
+                                {hidden ? "👁 Show spoiler" : "🙈 Hide spoiler"}
+                              </button>
+                            ) : null;
+                          })()}
+                          {n.isSpoiler && !revealedSpoilers.has(n.id) ? null : (
+                          <>
+                          {n.text && <p className="irm-note__text">{n.text}</p>}
+                          {n.images && n.images.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                              {n.images.map((url) => (
+                                <a key={url} href={url} target="_blank" rel="noreferrer">
+                                  <img src={url} alt="attachment" style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }} />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                          </>
+                          )}
                           {n.tags && n.tags.length > 0 && (
                             <div className="irm-note__tags">
                               {n.tags.map((tag) => (
@@ -953,7 +1198,7 @@ export default function BookDetail() {
           {/* ── Reading history ── */}
           <SectionCard>
             <SectionHead
-              title="Reading history"
+              title={isGame ? "Play history" : "Reading history"}
               subtitle={<><span className="irm-mono">{bookLogs.length}</span> sessions</>}
               expanded={historyColl.open}
               onToggle={historyColl.toggle}
@@ -988,11 +1233,15 @@ export default function BookDetail() {
                   <li key={log.id} className="irm-history__item">
                     <div className="irm-history__date irm-mono">{log.date.slice(5)}</div>
                     <div className="irm-history__range irm-mono">
-                      {log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : `p.${log.pagesRead}`}
+                      {unit === "page"
+                        ? (log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : `p.${log.pagesRead}`)
+                        : `${log.startPage} → ${log.endPage}${unit === "percent" ? "%" : ""}`}
+                      {log.checkpoint ? <span style={{ marginLeft: 8, opacity: 0.7 }}>📍 {log.checkpoint}</span> : null}
+                      {log.durationMinutes ? <span style={{ marginLeft: 8, opacity: 0.7 }}>⏱ {log.durationMinutes}m</span> : null}
                     </div>
                     <div className="irm-history__pages">
                       <span className="irm-mono">{log.pagesRead}</span>
-                      <span className="irm-history__pages-label">pages</span>
+                      <span className="irm-history__pages-label">{unitLabel(unit, true)}</span>
                     </div>
                     <button className="irm-logitem__delete" style={{ opacity: 1 }} onClick={() => { if (confirm('Delete this reading session?')) deleteReadingLog(log.id); }}>
                       <Icon.Trash size={14} />

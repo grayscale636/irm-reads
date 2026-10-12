@@ -13,7 +13,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const result = await pool.query(`
       SELECT id, book_id as "bookId", date::text, pages_read as "pagesRead",
-             COALESCE(start_page, 0) as "startPage", COALESCE(end_page, pages_read) as "endPage"
+             COALESCE(start_page, 0) as "startPage", COALESCE(end_page, pages_read) as "endPage",
+             duration_minutes as "durationMinutes", checkpoint
       FROM reading_logs WHERE user_id = $1 ORDER BY date DESC, created_at DESC
     `, [req.userId]);
     res.json(result.rows);
@@ -29,7 +30,8 @@ router.get('/book/:bookId', async (req: AuthRequest, res: Response) => {
     const { bookId } = req.params;
     const result = await pool.query(`
       SELECT id, book_id as "bookId", date::text, pages_read as "pagesRead",
-             COALESCE(start_page, 0) as "startPage", COALESCE(end_page, pages_read) as "endPage"
+             COALESCE(start_page, 0) as "startPage", COALESCE(end_page, pages_read) as "endPage",
+             duration_minutes as "durationMinutes", checkpoint
       FROM reading_logs WHERE book_id = $1 AND user_id = $2 ORDER BY date DESC, created_at DESC
     `, [bookId, req.userId]);
     res.json(result.rows);
@@ -52,9 +54,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     }
     
     await pool.query(`
-      INSERT INTO reading_logs (id, user_id, book_id, date, pages_read, start_page, end_page)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [log.id, req.userId, log.bookId, log.date, log.pagesRead, log.startPage, log.endPage]);
+      INSERT INTO reading_logs (id, user_id, book_id, date, pages_read, start_page, end_page, duration_minutes, checkpoint)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [log.id, req.userId, log.bookId, log.date, log.pagesRead, log.startPage, log.endPage,
+        log.durationMinutes ?? null, log.checkpoint ?? null]);
 
     // Update book's pages_read to the highest end_page for this book
     await pool.query(`

@@ -30,10 +30,29 @@ function normalizePageRef(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Coerce a free-form ref to a trimmed string or null.
+function normalizeRef(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const t = value.trim();
+  return t.length ? t : null;
+}
+
+// Normalize an images array into clean, deduped, non-empty URL strings.
+function normalizeImages(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    const u = String(raw).trim();
+    if (u) seen.add(u);
+  }
+  return [...seen];
+}
+
 // Columns shared by every SELECT so the shape stays consistent.
 const NOTE_COLS = `
   id, book_id as "bookId", text,
-  note_type as "noteType", page_ref as "pageRef", tags,
+  note_type as "noteType", page_ref as "pageRef", ref,
+  is_spoiler as "isSpoiler", images, tags,
   created_at::text as "createdAt"
 `;
 
@@ -42,7 +61,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const result = await pool.query(`
       SELECT n.id, n.book_id as "bookId", n.text,
-             n.note_type as "noteType", n.page_ref as "pageRef", n.tags,
+             n.note_type as "noteType", n.page_ref as "pageRef", n.ref,
+             n.is_spoiler as "isSpoiler", n.images, n.tags,
              n.created_at::text as "createdAt",
              b.title as "bookTitle", b.author as "bookAuthor"
       FROM book_notes n
@@ -77,18 +97,19 @@ router.get('/book/:bookId', async (req: AuthRequest, res: Response) => {
 // Add note
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { bookId, text, noteType, pageRef, tags } = req.body;
-    if (!bookId || !text?.trim()) {
-      res.status(400).json({ error: 'bookId and text are required' });
+    const { bookId, text, noteType, pageRef, ref, isSpoiler, images, tags } = req.body;
+    if (!bookId || (!text?.trim() && normalizeImages(images).length === 0)) {
+      res.status(400).json({ error: 'bookId and text (or images) are required' });
       return;
     }
     const result = await pool.query(`
-      INSERT INTO book_notes (book_id, user_id, text, note_type, page_ref, tags)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO book_notes (book_id, user_id, text, note_type, page_ref, ref, is_spoiler, images, tags)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING ${NOTE_COLS}
     `, [
-      bookId, req.userId, text.trim(),
-      normalizeType(noteType), normalizePageRef(pageRef), normalizeTags(tags),
+      bookId, req.userId, (text ?? '').trim(),
+      normalizeType(noteType), normalizePageRef(pageRef), normalizeRef(ref),
+      Boolean(isSpoiler), normalizeImages(images), normalizeTags(tags),
     ]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -101,18 +122,19 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { text, noteType, pageRef, tags } = req.body;
-    if (!text?.trim()) {
-      res.status(400).json({ error: 'text is required' });
+    const { text, noteType, pageRef, ref, isSpoiler, images, tags } = req.body;
+    if (!text?.trim() && normalizeImages(images).length === 0) {
+      res.status(400).json({ error: 'text or images are required' });
       return;
     }
     const result = await pool.query(`
       UPDATE book_notes
-      SET text = $1, note_type = $2, page_ref = $3, tags = $4
-      WHERE id = $5 AND user_id = $6
+      SET text = $1, note_type = $2, page_ref = $3, ref = $4, is_spoiler = $5, images = $6, tags = $7
+      WHERE id = $8 AND user_id = $9
       RETURNING ${NOTE_COLS}
     `, [
-      text.trim(), normalizeType(noteType), normalizePageRef(pageRef), normalizeTags(tags),
+      (text ?? '').trim(), normalizeType(noteType), normalizePageRef(pageRef), normalizeRef(ref),
+      Boolean(isSpoiler), normalizeImages(images), normalizeTags(tags),
       id, req.userId,
     ]);
     if (result.rowCount === 0) {

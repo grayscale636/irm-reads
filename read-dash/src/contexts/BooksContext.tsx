@@ -26,6 +26,9 @@ export interface BookData {
   startedAt?: string;
   finishedAt?: string;
   quotes?: (string | QuoteItem)[];
+  mediaType?: "book" | "game";
+  progressUnit?: "page" | "hour" | "chapter" | "percent";
+  metadata?: Record<string, unknown>;
 }
 
 export interface ReadingLogData {
@@ -35,6 +38,14 @@ export interface ReadingLogData {
   pagesRead: number;
   startPage: number;
   endPage: number;
+  durationMinutes?: number | null;
+  checkpoint?: string | null;
+}
+
+// Optional session metadata (mostly for games): play time + where you stopped.
+export interface SessionExtra {
+  durationMinutes?: number | null;
+  checkpoint?: string | null;
 }
 
 interface BooksContextType {
@@ -56,7 +67,7 @@ interface BooksContextType {
   updateBook: (id: string, updates: Partial<BookData>) => Promise<void>;
   deleteBook: (id: string) => Promise<void>;
   getBook: (id: string) => BookData | undefined;
-  addReadingLog: (bookId: string, startPage: number, endPage: number, date?: string) => Promise<void>;
+  addReadingLog: (bookId: string, startPage: number, endPage: number, date?: string, extra?: SessionExtra) => Promise<void>;
   deleteReadingLog: (id: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
@@ -69,7 +80,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // Helper function to create reading log (internal use)
-  const createReadingLog = async (bookId: string, startPage: number, endPage: number, date?: string): Promise<void> => {
+  const createReadingLog = async (bookId: string, startPage: number, endPage: number, date?: string, extra?: SessionExtra): Promise<void> => {
     const logDate = date || new Date().toISOString().split('T')[0];
     const pagesRead = endPage - startPage;
     const newLog: ReadingLogData = {
@@ -79,6 +90,8 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       pagesRead,
       startPage,
       endPage,
+      durationMinutes: extra?.durationMinutes ?? null,
+      checkpoint: extra?.checkpoint ?? null,
     };
     
     await apiAddReadingLog(newLog);
@@ -186,8 +199,8 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   };
 
   // Public addReadingLog function (uses internal createReadingLog)
-  const addReadingLog = async (bookId: string, startPage: number, endPage: number, date?: string): Promise<void> => {
-    await createReadingLog(bookId, startPage, endPage, date);
+  const addReadingLog = async (bookId: string, startPage: number, endPage: number, date?: string, extra?: SessionExtra): Promise<void> => {
+    await createReadingLog(bookId, startPage, endPage, date, extra);
 
     // Also update book's pagesRead if endPage is higher
     const book = books.find(b => b.id === bookId);

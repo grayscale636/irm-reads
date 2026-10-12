@@ -15,7 +15,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       SELECT id, title, author, cover, rating, progress, status,
              pages_read as "pagesRead", total_pages as "totalPages",
              reflection, started_at::text as "startedAt",
-             finished_at::text as "finishedAt", quotes
+             finished_at::text as "finishedAt", quotes,
+             media_type as "mediaType", progress_unit as "progressUnit", metadata
       FROM books WHERE user_id = $1 ORDER BY created_at DESC
     `, [req.userId]);
     res.json(result.rows);
@@ -33,7 +34,8 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
       SELECT id, title, author, cover, rating, progress, status,
              pages_read as "pagesRead", total_pages as "totalPages",
              reflection, started_at::text as "startedAt",
-             finished_at::text as "finishedAt", quotes
+             finished_at::text as "finishedAt", quotes,
+             media_type as "mediaType", progress_unit as "progressUnit", metadata
       FROM books WHERE id = $1 AND user_id = $2
     `, [id, req.userId]);
     
@@ -55,15 +57,17 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     console.log('Creating book:', { bookId: book.id, userId: req.userId, title: book.title });
     const result = await pool.query(`
       INSERT INTO books (id, user_id, title, author, cover, rating, progress, status,
-                        pages_read, total_pages, reflection, started_at, finished_at, quotes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                        pages_read, total_pages, reflection, started_at, finished_at, quotes,
+                        media_type, progress_unit, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING id
     `, [
       book.id, req.userId, book.title, book.author, book.cover || null, book.rating || 0,
       book.progress || 0, book.status, book.pagesRead || 0, book.totalPages,
       book.reflection || null,
       book.startedAt || null, book.finishedAt || null,
-      book.quotes || []
+      book.quotes || [],
+      book.mediaType || 'book', book.progressUnit || 'page', book.metadata || {}
     ]);
     res.status(201).json({ message: 'Book created', id: result.rows[0].id });
   } catch (error: any) {
@@ -101,6 +105,9 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     if (book.startedAt !== undefined) { fields.push(`started_at = $${paramCount++}`); values.push(book.startedAt || null); }
     if (book.finishedAt !== undefined) { fields.push(`finished_at = $${paramCount++}`); values.push(book.finishedAt || null); }
     if (book.quotes !== undefined) { fields.push(`quotes = $${paramCount++}`); values.push(book.quotes); }
+    if (book.mediaType !== undefined) { fields.push(`media_type = $${paramCount++}`); values.push(book.mediaType); }
+    if (book.progressUnit !== undefined) { fields.push(`progress_unit = $${paramCount++}`); values.push(book.progressUnit); }
+    if (book.metadata !== undefined) { fields.push(`metadata = $${paramCount++}`); values.push(book.metadata); }
     
     if (fields.length === 0) {
       res.status(400).json({ error: 'No fields to update' });

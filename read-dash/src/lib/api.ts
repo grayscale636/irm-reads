@@ -28,6 +28,9 @@ export function normalizeQuote(q: string | QuoteItem): QuoteItem {
   return typeof q === 'string' ? { text: q } : q;
 }
 
+export type MediaType = 'book' | 'game';
+export type ProgressUnit = 'page' | 'hour' | 'chapter' | 'percent';
+
 export interface Book {
   id: string;
   title: string;
@@ -42,6 +45,9 @@ export interface Book {
   startedAt?: string;
   finishedAt?: string;
   quotes?: (string | QuoteItem)[];
+  mediaType?: MediaType;
+  progressUnit?: ProgressUnit;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ReadingLog {
@@ -51,6 +57,8 @@ export interface ReadingLog {
   pagesRead: number;
   startPage: number;
   endPage: number;
+  durationMinutes?: number | null;
+  checkpoint?: string | null;
 }
 
 // ============ BOOKS API ============
@@ -126,6 +134,11 @@ export interface BookNote {
   text: string;
   noteType: NoteType;
   pageRef?: number | null;
+  /** Free-form reference — page number, location, chapter, level, etc. */
+  ref?: string | null;
+  isSpoiler: boolean;
+  /** Image URLs (MinIO / any) attached to this note. */
+  images: string[];
   tags: string[];
   createdAt: string;
 }
@@ -133,6 +146,9 @@ export interface BookNote {
 export interface NoteFields {
   noteType?: NoteType;
   pageRef?: number | null;
+  ref?: string | null;
+  isSpoiler?: boolean;
+  images?: string[];
   tags?: string[];
 }
 
