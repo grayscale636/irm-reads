@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { reindex, relatedNotes, semanticMap } from '../lib/semantic';
+import {
+  reindex, relatedNotes, semanticMap, suggestThemesForNote, suggestThemesForText, unthemedNotes,
+} from '../lib/semantic';
 
 const router = Router();
 router.use(authMiddleware);
@@ -23,6 +25,36 @@ router.get('/related/:noteId', async (req: AuthRequest, res: Response) => {
   } catch (e) {
     console.error('[semantic] related failed:', e);
     res.status(502).json({ error: 'Related notes unavailable' });
+  }
+});
+
+// GET /api/semantic/suggest/:noteId — theme suggestions for a saved note.
+router.get('/suggest/:noteId', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await suggestThemesForNote(req.userId!, req.params.noteId));
+  } catch (e) {
+    console.error('[semantic] suggest failed:', e);
+    res.status(502).json({ error: 'Suggestions unavailable' });
+  }
+});
+
+// POST /api/semantic/suggest { text } — theme suggestions while writing.
+router.post('/suggest', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await suggestThemesForText(req.userId!, String(req.body?.text ?? '')));
+  } catch (e) {
+    console.error('[semantic] suggest failed:', e);
+    res.status(502).json({ error: 'Suggestions unavailable' });
+  }
+});
+
+// GET /api/semantic/unthemed — review queue: notes without themes + suggestions.
+router.get('/unthemed', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await unthemedNotes(req.userId!));
+  } catch (e) {
+    console.error('[semantic] unthemed failed:', e);
+    res.status(502).json({ error: 'Unthemed notes unavailable' });
   }
 });
 

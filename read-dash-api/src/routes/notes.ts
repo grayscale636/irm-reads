@@ -180,6 +180,28 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Replace only a note's themes (accepting a suggestion must not touch other fields).
+router.put('/:id/themes', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const own = await pool.query('SELECT 1 FROM book_notes WHERE id = $1 AND user_id = $2', [id, req.userId]);
+    if (!own.rowCount) {
+      res.status(404).json({ error: 'Note not found' });
+      return;
+    }
+    const themes: unknown[] = Array.isArray(req.body?.themes) ? req.body.themes : [];
+    await setNoteThemes(id, themes);
+    // Labelled, or explicitly reviewed as "no theme" → out of the Unthemed queue.
+    if (themes.length || req.body?.reviewed === true) {
+      await pool.query('UPDATE book_notes SET themes_reviewed = true WHERE id = $1', [id]);
+    }
+    res.json(await fetchNote(id));
+  } catch (error) {
+    console.error('Error updating note themes:', error);
+    res.status(500).json({ error: 'Failed to update themes' });
+  }
+});
+
 // Delete note
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {

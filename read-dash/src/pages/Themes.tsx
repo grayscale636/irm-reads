@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getThemes, getThemeNotes, type Theme, type ThemeNote } from "@/lib/api";
+import { UnthemedQueue } from "@/components/design/UnthemedQueue";
+
+const UNTHEMED = "unthemed";
 
 // Theme → work → note: browse books and games by what they're about.
 export default function Themes() {
@@ -24,7 +27,7 @@ export default function Themes() {
   }, [params, themes]);
 
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || selected === UNTHEMED) return;
     setNotes(null);
     setRevealed(new Set());
     getThemeNotes(selected).then(setNotes).catch((e) => setError(e.message));
@@ -56,14 +59,16 @@ export default function Themes() {
       <div className="irm-page-head">
         <div>
           <p className="irm-eyebrow">Themes</p>
-          <h1 className="irm-page-title">{theme?.name || "Themes"}</h1>
+          <h1 className="irm-page-title">{selected === UNTHEMED ? "Unthemed notes" : theme?.name || "Themes"}</h1>
           <p className="irm-page-sub">
-            {theme
+            {selected === UNTHEMED
+              ? "Notes without a theme yet — suggestions come from similar notes you've already labelled."
+              : theme
               ? <>{theme.description} · <span className="irm-mono">{theme.noteCount}</span> notes across <span className="irm-mono">{theme.workCount}</span> works</>
               : "What your books and games keep coming back to."}
           </p>
         </div>
-        {spoilerIds.length > 0 && (
+        {selected !== UNTHEMED && spoilerIds.length > 0 && (
           <button
             className="irm-btn irm-btn--ghost"
             onClick={() => setRevealed(allShown ? new Set() : new Set(spoilerIds))}
@@ -87,9 +92,17 @@ export default function Themes() {
             {t.name} <span className="irm-mono">{t.noteCount}</span>
           </button>
         ))}
+        <button
+          className={`irm-themes__chip irm-themes__chip--suggested${selected === UNTHEMED ? " is-active" : ""}`}
+          onClick={() => setParams({ t: UNTHEMED }, { replace: true })}
+        >
+          Unthemed
+        </button>
       </div>
 
-      {!notes ? (
+      {selected === UNTHEMED ? (
+        <UnthemedQueue themes={themes || []} onLabelled={() => getThemes(true).then(setThemes)} />
+      ) : !notes ? (
         <div className="irm-loading"><div className="irm-spinner" /></div>
       ) : works.length === 0 ? (
         <div className="irm-card irm-empty" style={{ minHeight: 200 }}>

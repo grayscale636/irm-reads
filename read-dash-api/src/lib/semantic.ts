@@ -12,6 +12,16 @@ const COLLECTION = 'irmreads_notes';
 /** Very short notes ("shodanco anj") are noise in a meaning map. */
 export const MIN_CHARS = 40;
 const NEIGHBOURS = 3;
+/** Below this, similarity is close to chance (measured against hand-labelled themes). */
+export const MIN_SCORE = 0.45;
+/** Theme suggestions: up to 8 nearest labelled notes vote, but only neighbours scoring
+ *  ≥ MIN_SCORE count (otherwise unrelated text still gets a confident-looking vote). A theme
+ *  needs ≥50% of the vote from ≥2 different works (else a book just echoes its own labels).
+ *  Leave-one-out on 121 labelled notes: 77% precision, suggests for ~1/3; wrongly suggests
+ *  something for 15% of notes judged to have no theme. */
+const SUGGEST_K = 8;
+const SUGGEST_MIN_CONF = 0.5;
+const SUGGEST_MIN_WORKS = 2;
 
 // transformers.js is ESM-only; keep a real dynamic import under CommonJS.
 const dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<any>;
@@ -222,6 +232,7 @@ export async function semanticMap(userId: string): Promise<SemanticMap> {
       .sort((x, y) => y.s - x.s)
       .slice(0, NEIGHBOURS);
     for (const { j, s } of scored) {
+      if (s < MIN_SCORE) continue;
       const key = [a.id, live[j].id].sort().join('|');
       if (seen.has(key)) continue;
       seen.add(key);
@@ -268,6 +279,7 @@ export async function relatedNotes(userId: string, noteId: string, limit = 5) {
         must_not: [{ key: 'book_id', match: { value: own.rows[0].book_id } }],
       },
       limit,
+      score_threshold: MIN_SCORE,
       with_payload: false,
     }),
   });
@@ -282,4 +294,79 @@ export async function relatedNotes(userId: string, noteId: string, limit = 5) {
   );
   const byId = new Map(rows.map((x) => [x.id, x]));
   return hits.filter((h) => byId.has(h.id)).map((h) => ({ ...byId.get(h.id), score: Math.round(h.score * 1000) / 1000 }));
+}
+
+export interface ThemeSuggestion { slug: string; confidence: number }
+
+/** Suggest themes for a vector (a stored note, or text being written) by letting the
+ *  nearest *labelled* notes vote, weighted by similarity. */
+async function suggestFor(userId: string, query: string | number[], excludeId?: string): Promise<ThemeSuggestion[]> {
+  await ensureCollection();
+  const r = await qdrant(`/collections/${COLLECTION}/points/query`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      filter: {
+        must: [{ key: 'user_id', match: { value: userId } }],
+        ...(excludeId ? { must_not: [{ has_id: [excludeId] }] } : {}),
+      },
+      limit: 60,
+      with_payload: false,
+    }),
+  });
+  const hits: Array<{ id: string; score: number }> = (r?.result?.points ?? []).map((p: any) => ({ id: String(p.id), score: p.score }));
+  if (!hits.length) return [];
+  const { rows } = await pool.query(
+    `SELECT t.note_id::text AS id, n.book_id AS "bookId", array_agg(t.theme_slug) AS themes
+     FROM note_themes t JOIN book_notes n ON n.id = t.note_id
+     WHERE t.note_id = ANY($1::uuid[]) GROUP BY t.note_id, n.book_id`,
+    [hits.map((h) => h.id)]
+  );
+  const labelOf = new Map<string, { bookId: string; themes: string[] }>(rows.map((x) => [x.id, x]));
+  const labelled = hits.filter((h) => h.score >= MIN_SCORE && labelOf.has(h.id)).slice(0, SUGGEST_K);
+  const votes = new Map<string, number>();
+  const works = new Map<string, Set<string>>();
+  let total = 0;
+  for (const h of labelled) {
+    const w = Math.max(h.score, 0);
+    const { bookId, themes } = labelOf.get(h.id)!;
+    total += w;
+    for (const t of themes) {
+      votes.set(t, (votes.get(t) || 0) + w);
+      (works.get(t) || works.set(t, new Set()).get(t)!).add(bookId);
+    }
+  }
+  if (!total) return [];
+  return [...votes.entries()]
+    .map(([slug, v]) => ({ slug, confidence: Math.round((v / total) * 100) / 100 }))
+    .filter((s) => s.confidence >= SUGGEST_MIN_CONF && (works.get(s.slug)?.size ?? 0) >= SUGGEST_MIN_WORKS)
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 2);
+}
+
+export const suggestThemesForNote = (userId: string, noteId: string) => suggestFor(userId, noteId, noteId);
+
+export async function suggestThemesForText(userId: string, text: string): Promise<ThemeSuggestion[]> {
+  if (text.trim().length < MIN_CHARS) return [];
+  const [vector] = await embed([text.trim()]);
+  return suggestFor(userId, vector);
+}
+
+/** Notes with no theme yet, each with suggestions (the review queue). */
+export async function unthemedNotes(userId: string) {
+  const { rows } = await pool.query(
+    `SELECT n.id, n.book_id AS "bookId", n.text, n.is_spoiler AS "isSpoiler", n.ref,
+            b.title AS "bookTitle", b.media_type AS "mediaType"
+     FROM book_notes n JOIN books b ON b.id = n.book_id
+     WHERE n.user_id = $1 AND NOT n.themes_reviewed
+       AND NOT EXISTS (SELECT 1 FROM note_themes t WHERE t.note_id = n.id)
+     ORDER BY b.title, n.created_at`,
+    [userId]
+  );
+  const out = [];
+  for (const r of rows) {
+    const suggestions = r.text.trim().length >= MIN_CHARS ? await suggestThemesForNote(userId, r.id).catch(() => []) : [];
+    out.push({ ...r, suggestions });
+  }
+  return out;
 }

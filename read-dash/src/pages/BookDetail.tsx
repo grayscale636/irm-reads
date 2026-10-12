@@ -879,7 +879,7 @@ export default function BookDetail() {
                       {noteUploading ? "Uploading…" : "Attach image"}
                     </button>
                   </div>
-                  <ThemePicker themes={allThemes} value={noteThemes} onChange={setNoteThemes} />
+                  <ThemePicker themes={allThemes} value={noteThemes} onChange={setNoteThemes} suggestFromText={noteInput} />
                   {noteImages.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                       {noteImages.map((url) => (
@@ -1029,7 +1029,7 @@ export default function BookDetail() {
                               {noteUploading ? "Uploading…" : "Add image"}
                             </button>
                           </div>
-                          <ThemePicker themes={allThemes} value={editThemes} onChange={setEditThemes} />
+                          <ThemePicker themes={allThemes} value={editThemes} onChange={setEditThemes} suggestFromText={editNoteText} />
                           {editImages.length > 0 && (
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                               {editImages.map((url) => (

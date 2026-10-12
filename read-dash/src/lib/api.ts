@@ -441,3 +441,49 @@ export async function getRelatedNotes(noteId: string, limit = 5): Promise<Relate
   if (!response.ok) throw new Error('Related notes unavailable');
   return response.json();
 }
+
+export interface ThemeSuggestion {
+  slug: string;
+  confidence: number;
+}
+
+export interface UnthemedNote {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  mediaType: MediaType;
+  text: string;
+  isSpoiler: boolean;
+  ref: string | null;
+  suggestions: ThemeSuggestion[];
+}
+
+export async function suggestThemesForText(text: string): Promise<ThemeSuggestion[]> {
+  const response = await fetch(`${API_BASE}/semantic/suggest`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function getUnthemedNotes(): Promise<UnthemedNote[]> {
+  const response = await fetch(`${API_BASE}/semantic/unthemed`, { headers: getAuthHeaders() });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to load unthemed notes');
+  return response.json();
+}
+
+/** Replace only the themes of a note (other fields untouched).
+ *  `reviewed` with no themes = "this note has no theme" (leaves the review queue). */
+export async function setNoteThemes(id: string, themes: string[], reviewed = false): Promise<BookNote> {
+  const response = await fetch(`${API_BASE}/notes/${id}/themes`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ themes, reviewed }),
+  });
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (!response.ok) throw new Error('Failed to update themes');
+  return response.json();
+}
