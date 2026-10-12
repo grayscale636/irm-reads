@@ -530,22 +530,10 @@ export default function BookDetail() {
               </span>
             </div>
 
-            {isGame && (
+            {(platform || difficulty) && (
               <div className="irm-detail__metaitem">
-                <span className="irm-field__label">Type</span>
-                <span className="irm-mono irm-detail__metaval">Game</span>
-              </div>
-            )}
-            {platform && (
-              <div className="irm-detail__metaitem">
-                <span className="irm-field__label">Platform</span>
-                <span className="irm-mono irm-detail__metaval">{platform}</span>
-              </div>
-            )}
-            {difficulty && (
-              <div className="irm-detail__metaitem">
-                <span className="irm-field__label">Difficulty</span>
-                <span className="irm-mono irm-detail__metaval">{difficulty}</span>
+                <span className="irm-field__label">{platform && difficulty ? "Platform · Difficulty" : platform ? "Platform" : "Difficulty"}</span>
+                <span className="irm-mono irm-detail__metaval">{[platform, difficulty].filter(Boolean).join(" · ")}</span>
               </div>
             )}
 

@@ -2223,6 +2223,10 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 20px;
+  /* Sticky + taller than the screen would strand the bottom actions (Export, Delete). */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .irm-detail__cover {
   position: relative;
@@ -3099,7 +3103,7 @@ button { font-family: inherit; }
   .irm-search { width: 200px; }
   .irm-page-title { font-size: 26px; }
   .irm-detail__layout { grid-template-columns: 1fr; gap: 24px; }
-  .irm-detail__left { position: static; }
+  .irm-detail__left { position: static; max-height: none; overflow: visible; }
   .irm-detail__cover .irm-cover { width: 160px; height: 240px; }
   .irm-detail__progress-grid { grid-template-columns: 1fr 1fr; }
   .irm-detail__progress-stat:last-child { grid-column: 1 / -1; }
