@@ -48,6 +48,18 @@ export interface SessionExtra {
   checkpoint?: string | null;
 }
 
+// Keep status ↔ progress ↔ finishedAt consistent (mirrors the API guard):
+// completed = 100% with a finish date; active/backlog statuses have no finish date.
+function normalizeStatus(book: BookData): void {
+  if (book.status === "completed") {
+    book.pagesRead = book.totalPages;
+    book.progress = 100;
+    if (!book.finishedAt) book.finishedAt = new Date().toISOString().split('T')[0];
+  } else if (book.status === "reading" || book.status === "paused" || book.status === "want-to-read") {
+    book.finishedAt = undefined;
+  }
+}
+
 interface BooksContextType {
   books: BookData[];
   readingLogs: ReadingLogData[];
@@ -165,21 +177,16 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    // Auto-set finished date when completed
-    if (updates.status === "completed" && !updated.finishedAt) {
-      updated.finishedAt = new Date().toISOString().split('T')[0];
-      updated.progress = 100;
-      
-      // Log remaining pages if completing
-      if (updated.pagesRead < updated.totalPages) {
-        await createReadingLog(id, book.pagesRead, updated.totalPages);
-      }
-      updated.pagesRead = updated.totalPages;
+    // Completing logs the remaining pages (even when a finishedAt came along).
+    if (updates.status === "completed" && book.status !== "completed" && updated.pagesRead < updated.totalPages) {
+      await createReadingLog(id, book.pagesRead, updated.totalPages, updated.finishedAt);
     }
     // Auto-set started date when reading
     if (updates.status === "reading" && !updated.startedAt) {
       updated.startedAt = new Date().toISOString().split('T')[0];
     }
+
+    normalizeStatus(updated);
 
     await apiUpdateBook(id, updated);
     setBooks((prev) =>

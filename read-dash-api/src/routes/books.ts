@@ -5,6 +5,21 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Keep status ↔ progress ↔ finished_at consistent no matter what the client sent:
+// completed = 100% with a finish date; reading/paused/want-to-read have none.
+async function normalizeBookStatus(id: string, userId: string | undefined): Promise<void> {
+  await pool.query(`
+    UPDATE books SET
+      pages_read  = CASE WHEN status = 'completed' THEN total_pages ELSE pages_read END,
+      progress    = CASE WHEN status = 'completed' THEN 100 ELSE progress END,
+      finished_at = CASE
+        WHEN status = 'completed' THEN COALESCE(finished_at, CURRENT_DATE)
+        WHEN status IN ('reading', 'paused', 'want-to-read') THEN NULL
+        ELSE finished_at END
+    WHERE id = $1 AND user_id = $2
+  `, [id, userId]);
+}
+
 // Apply auth middleware to all routes
 router.use(authMiddleware);
 
@@ -69,6 +84,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       book.quotes || [],
       book.mediaType || 'book', book.progressUnit || 'page', book.metadata || {}
     ]);
+    await normalizeBookStatus(book.id, req.userId);
     res.status(201).json({ message: 'Book created', id: result.rows[0].id });
   } catch (error: any) {
     console.error('Error creating book:', error.message, error.detail || '');
@@ -121,6 +137,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       `UPDATE books SET ${fields.join(', ')} WHERE id = $${paramCount}`,
       values
     );
+    await normalizeBookStatus(id, req.userId);
 
     res.json({ message: 'Book updated', id });
   } catch (error) {
