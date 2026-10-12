@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BookData } from "@/contexts/BooksContext";
 import { formatHours, isSteamGame, playMinutes } from "@/lib/media";
 import { Icon } from "./Icons";
@@ -7,17 +7,27 @@ interface Props {
   book: BookData;
   today: string;
   onLogSession: (minutes: number, date: string, checkpoint: string | null) => Promise<void>;
+  onSaveCheckpoint: (checkpoint: string | null) => Promise<void>;
 }
 
 // Games track time played only — no target or percentage, since story length
 // is unknown and "90% done" would spoil the pacing.
-export function GamePlaytime({ book, today, onLogSession }: Props) {
+export function GamePlaytime({ book, today, onLogSession, onSaveCheckpoint }: Props) {
   const [date, setDate] = useState(today);
   const [minutes, setMinutes] = useState("");
   const [checkpoint, setCheckpoint] = useState("");
   const [saving, setSaving] = useState(false);
   const steam = isSteamGame(book);
-  const lastSynced = (book.metadata as Record<string, unknown> | undefined)?.steam_last_synced as string | undefined;
+  const meta = (book.metadata || {}) as Record<string, unknown>;
+  const lastSynced = meta.steam_last_synced as string | undefined;
+  const savedCheckpoint = (meta.checkpoint as string | undefined) || "";
+  const [current, setCurrent] = useState(savedCheckpoint);
+  useEffect(() => setCurrent(savedCheckpoint), [savedCheckpoint]);
+
+  const saveCheckpoint = () => {
+    const next = current.trim();
+    if (next !== savedCheckpoint) void onSaveCheckpoint(next || null);
+  };
 
   const submit = async () => {
     const m = parseInt(minutes, 10);
@@ -57,6 +67,20 @@ export function GamePlaytime({ book, today, onLogSession }: Props) {
           <div className="irm-field__label">Played</div>
           <div className="irm-mono irm-detail__progress-val">{formatHours(playMinutes(book))}</div>
         </div>
+      </div>
+      <div className="irm-detail__pages-row">
+        <label className="irm-field">
+          <span className="irm-field__label">Current checkpoint</span>
+          <input
+            type="text"
+            className="irm-input"
+            value={current}
+            placeholder="Where you left off"
+            onChange={(e) => setCurrent(e.target.value)}
+            onBlur={saveCheckpoint}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          />
+        </label>
       </div>
       {!steam && (
         <div className="irm-detail__pages-row">

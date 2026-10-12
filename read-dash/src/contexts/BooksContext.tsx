@@ -269,7 +269,11 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     const updated: BookData = {
       ...book,
       pagesRead: Math.floor(after / 60),
-      metadata: { ...(book.metadata || {}), playtime_minutes: after },
+      metadata: {
+        ...(book.metadata || {}),
+        playtime_minutes: after,
+        ...(checkpoint ? { checkpoint } : {}),
+      },
     };
     if (updated.status === "paused" || updated.status === "want-to-read") {
       updated.status = "reading";

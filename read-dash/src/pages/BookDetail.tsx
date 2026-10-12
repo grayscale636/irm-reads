@@ -564,6 +564,9 @@ export default function BookDetail() {
               book={book}
               today={today}
               onLogSession={(minutes, date, checkpoint) => logGameSession(book.id, minutes, date, checkpoint)}
+              onSaveCheckpoint={(checkpoint) =>
+                updateBook(book.id, { metadata: { ...(book.metadata || {}), checkpoint: checkpoint ?? undefined } })
+              }
             />
           ) : (
           <section className="irm-card">
