@@ -10,7 +10,7 @@ const PROJECTS = {
   "grayscale636/irm-reads": {
     dir: "/home/gery/Documents/projects/productivity/irm-reads",
     name: "IRM Reads",
-    webhook: "https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD",
+    webhook: process.env.DISCORD_WEBHOOK_URL,
     deploy: () => {
       const start = Date.now();
       execSync("git pull origin master", { cwd: PROJECTS["grayscale636/irm-reads"].dir, timeout: 30000 });
@@ -24,7 +24,7 @@ const PROJECTS = {
   "grayscale636/kei-personal-assistant": {
     dir: "/home/gery/Documents/projects/AI/bot_dc",
     name: "Kei Bot DC",
-    webhook: "https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD",
+    webhook: process.env.DISCORD_WEBHOOK_URL,
     deploy: () => {
       const start = Date.now();
       execSync("git fetch origin master", { cwd: PROJECTS["grayscale636/kei-personal-assistant"].dir, timeout: 30000 });
@@ -48,6 +48,7 @@ function sendDiscord(project, status, color, msg) {
       timestamp: new Date().toISOString(),
     }],
   };
+  if (!project.webhook) return;
   execSync(`curl -s -X POST "${project.webhook}" -H "Content-Type: application/json" -d '${JSON.stringify(payload)}'`, { timeout: 5000 });
 }
 

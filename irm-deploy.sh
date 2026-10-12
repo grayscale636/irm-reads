@@ -2,9 +2,11 @@
 echo "=== IRM Reads Deploy ==="
 REPO_DIR="/home/gery/Documents/projects/productivity/irm-reads"
 START_TIME=$(date +%s)
-WEBHOOK="https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD"
+# Discord webhook lives in read-dash-api/.env (DISCORD_WEBHOOK_URL), never in git.
+WEBHOOK=$(grep -s '^DISCORD_WEBHOOK_URL=' "$REPO_DIR/read-dash-api/.env" | cut -d= -f2-)
 
 send_notif() {
+  [ -z "$WEBHOOK" ] && return 0
   local status="$1"
   local color="$2"
   local desc="$3"

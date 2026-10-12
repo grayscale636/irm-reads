@@ -135,17 +135,17 @@ app.post('/api/deploy', (req, res) => {
   const project = PROJECTS[repo];
   if (!project) return;
 
-  const WEBHOOK = 'https://discord.com/api/webhooks/1394595057905958923/Eq7RrMQYPSODInBLmb5drZjyPvfRsqyUvEmZqNCLPbM4HGxwBHove2E-S1Wa31EWl5VD';
+  const WEBHOOK = process.env.DISCORD_WEBHOOK_URL; // in .env, never in git
   const start = Date.now();
 
   setTimeout(() => {
     try {
       project.deploy();
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"${project.name}-Deploy","embeds":[{"title":"✅ ${project.name} Deploy Successful","description":"Deployed in ${elapsed}s","color":2276157}]}'`, { timeout: 5000 });
+      if (WEBHOOK) execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"${project.name}-Deploy","embeds":[{"title":"✅ ${project.name} Deploy Successful","description":"Deployed in ${elapsed}s","color":2276157}]}'`, { timeout: 5000 });
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"${project.name}-Deploy","embeds":[{"title":"❌ ${project.name} Deploy Failed","description":"Error: ${errMsg.slice(0, 400)}","color":15728644}]}'`, { timeout: 5000 });
+      if (WEBHOOK) execSync(`curl -s -X POST "${WEBHOOK}" -H "Content-Type: application/json" -d '{"username":"${project.name}-Deploy","embeds":[{"title":"❌ ${project.name} Deploy Failed","description":"Error: ${errMsg.slice(0, 400)}","color":15728644}]}'`, { timeout: 5000 });
     }
   }, 100);
 });
