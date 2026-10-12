@@ -11,7 +11,7 @@ import goalsRouter from './routes/goals';
 import aiRouter from './routes/ai';
 import ocrRouter from './routes/ocr';
 import steamRouter from './routes/steam';
-import { syncAllUsers } from './lib/steam';
+import { syncAllUsers, SYNC_INTERVAL_MS } from './lib/steam';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -193,7 +193,6 @@ app.listen(Number(PORT), '0.0.0.0', () => {
 // so this interval is the session granularity. Production only, to avoid
 // dev instances double-logging against the same DB.
 if (isProduction && process.env.STEAM_API_KEY) {
-  const STEAM_SYNC_MS = 30 * 60 * 1000;
   setTimeout(() => void syncAllUsers(), 60 * 1000);
-  setInterval(() => void syncAllUsers(), STEAM_SYNC_MS);
+  setInterval(() => void syncAllUsers(), SYNC_INTERVAL_MS);
 }

@@ -4,6 +4,12 @@ const API = 'https://api.steampowered.com';
 const STORE = 'https://store.steampowered.com/api';
 const CDN = 'https://cdn.cloudflare.steamstatic.com/steam/apps';
 
+// Steam exposes only playtime totals (no per-session history), so sessions are
+// reconstructed from growth between syncs. Growth seen within SESSION_GAP_MS of
+// the previous growth extends the same session instead of starting a new one.
+export const SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const SESSION_GAP_MS = SYNC_INTERVAL_MS + 15 * 60 * 1000;
+
 export interface OwnedGame {
   appid: number;
   name: string;
@@ -94,18 +100,39 @@ export async function syncUser(userId: string, steamId: string): Promise<{ updat
       if (!game) continue;
       const prev = Number(book.metadata.steam_playtime_minutes) || 0;
       const now = game.playtimeMinutes;
-      const meta = { ...book.metadata, steam_playtime_minutes: now, steam_last_synced: new Date().toISOString() };
+      const nowIso = new Date().toISOString();
+      const meta: Record<string, unknown> = { ...book.metadata, steam_playtime_minutes: now, steam_last_synced: nowIso };
       if (now <= prev) {
         await client.query('UPDATE books SET metadata = $1 WHERE id = $2', [meta, book.id]);
         continue;
       }
-      const start = Math.floor(prev / 60);
+      const delta = now - prev;
       const end = Math.floor(now / 60);
-      await client.query(
-        `INSERT INTO reading_logs (id, user_id, book_id, date, pages_read, start_page, end_page, duration_minutes)
-         VALUES ($1, $2, $3, CURRENT_DATE, $4, $5, $6, $7)`,
-        [`steam-${book.metadata.steam_appid}-${Date.now()}`, userId, book.id, end - start, start, end, now - prev]
-      );
+      const lastGrowth = Date.parse(String(book.metadata.steam_last_growth ?? ''));
+      const openLog = book.metadata.steam_open_log as string | undefined;
+
+      // Still the same sitting → extend the open session (if the user hasn't deleted it).
+      let extended = false;
+      if (openLog && Number.isFinite(lastGrowth) && Date.now() - lastGrowth <= SESSION_GAP_MS) {
+        const r = await client.query(
+          `UPDATE reading_logs SET end_page = $1, pages_read = $1 - start_page,
+             duration_minutes = COALESCE(duration_minutes, 0) + $2
+           WHERE id = $3 AND book_id = $4`,
+          [end, delta, openLog, book.id]
+        );
+        extended = (r.rowCount ?? 0) > 0;
+      }
+      if (!extended) {
+        const start = Math.floor(prev / 60);
+        const logId = `steam-${book.metadata.steam_appid}-${Date.now()}`;
+        await client.query(
+          `INSERT INTO reading_logs (id, user_id, book_id, date, pages_read, start_page, end_page, duration_minutes)
+           VALUES ($1, $2, $3, CURRENT_DATE, $4, $5, $6, $7)`,
+          [logId, userId, book.id, end - start, start, end, delta]
+        );
+        meta.steam_open_log = logId;
+      }
+      meta.steam_last_growth = nowIso;
       await client.query(
         `UPDATE books SET metadata = $1, pages_read = $2,
            status = CASE WHEN status IN ('want-to-read', 'paused') THEN 'reading' ELSE status END,
@@ -115,7 +142,7 @@ export async function syncUser(userId: string, steamId: string): Promise<{ updat
         [meta, end, book.id]
       );
       updated++;
-      minutes += now - prev;
+      minutes += delta;
     }
     await client.query('COMMIT');
   } catch (e) {
