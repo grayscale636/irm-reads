@@ -1,26 +1,39 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
-import { useBooks } from "@/contexts/BooksContext";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
+import { useBooks, isBook } from "@/contexts/BooksContext";
 import type { OutletCtx } from "@/layouts/AppLayout";
 import { Icon } from "@/components/design/Icons";
 import { LibraryCard } from "@/components/design/LibraryCard";
+import { SteamDialog } from "@/components/design/SteamDialog";
 
 type Filter = "all" | "reading" | "completed" | "want-to-read" | "paused" | "dnf";
 type SortKey = "recent" | "title" | "author" | "rating" | "progress" | "pages";
+type Media = "books" | "games";
 
-const TABS: Array<{ id: Filter; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "reading", label: "Reading" },
-  { id: "paused", label: "Paused" },
-  { id: "completed", label: "Completed" },
-  { id: "want-to-read", label: "Want to read" },
-  { id: "dnf", label: "DNF" },
-];
+// Same statuses, different words per shelf.
+const TABS: Record<Media, Array<{ id: Filter; label: string }>> = {
+  books: [
+    { id: "all", label: "All" },
+    { id: "reading", label: "Reading" },
+    { id: "paused", label: "Paused" },
+    { id: "completed", label: "Completed" },
+    { id: "want-to-read", label: "Want to read" },
+    { id: "dnf", label: "DNF" },
+  ],
+  games: [
+    { id: "all", label: "All" },
+    { id: "reading", label: "Playing" },
+    { id: "paused", label: "Paused" },
+    { id: "completed", label: "Finished" },
+    { id: "want-to-read", label: "Backlog" },
+    { id: "dnf", label: "Dropped" },
+  ],
+};
 
-const SORTS: Array<{ id: SortKey; label: string }> = [
+const SORTS: Array<{ id: SortKey; label: string; game?: string }> = [
   { id: "recent", label: "Recently active" },
   { id: "title", label: "Title (A→Z)" },
-  { id: "author", label: "Author (A→Z)" },
+  { id: "author", label: "Author (A→Z)", game: "Developer (A→Z)" },
   { id: "rating", label: "Rating (high→low)" },
   { id: "progress", label: "Progress (high→low)" },
   { id: "pages", label: "Length (longest)" },
@@ -29,7 +42,21 @@ const SORTS: Array<{ id: SortKey; label: string }> = [
 export default function Library() {
   const navigate = useNavigate();
   const { openAddBookDialog } = useOutletContext<OutletCtx>();
-  const { books, readingLogs, isLoading } = useBooks();
+  const { books: allBooks, readingLogs, isLoading } = useBooks();
+  // Shelf lives in the URL so coming back from a detail page keeps it.
+  const [params, setParams] = useSearchParams();
+  const media: Media = params.get("media") === "games" ? "games" : "books";
+  const isGames = media === "games";
+  const setMedia = (m: Media) => {
+    setFilter("all");
+    setParams(m === "games" ? { media: "games" } : {}, { replace: true });
+  };
+  const books = useMemo(
+    () => allBooks.filter((b) => (isGames ? !isBook(b) : isBook(b))),
+    [allBooks, isGames],
+  );
+  const gameCount = useMemo(() => allBooks.filter((b) => !isBook(b)).length, [allBooks]);
+  const [steamOpen, setSteamOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("recent");
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,18 +133,36 @@ export default function Library() {
       <div className="irm-page-head">
         <div>
           <p className="irm-eyebrow">Library</p>
-          <h1 className="irm-page-title">Your books</h1>
+          <h1 className="irm-page-title">{isGames ? "Your games" : "Your books"}</h1>
           <p className="irm-page-sub">
-            <span className="irm-mono">{books.length}</span> books ·{" "}
-            <span className="irm-mono">{counts.reading}</span> in progress
+            <span className="irm-mono">{books.length}</span> {isGames ? "games" : "books"} ·{" "}
+            <span className="irm-mono">{counts.reading}</span> {isGames ? "playing" : "in progress"}
           </p>
+          <div className="irm-mediaswitch" role="tablist">
+            <button
+              role="tab"
+              aria-selected={!isGames}
+              className={`irm-mediaswitch__btn${!isGames ? " is-active" : ""}`}
+              onClick={() => setMedia("books")}
+            >
+              📚 Books <span className="irm-mono">{allBooks.length - gameCount}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={isGames}
+              className={`irm-mediaswitch__btn${isGames ? " is-active" : ""}`}
+              onClick={() => setMedia("games")}
+            >
+              🎮 Games <span className="irm-mono">{gameCount}</span>
+            </button>
+          </div>
         </div>
         <div className="irm-library__head-actions">
           <label className="irm-search">
             <Icon.Search size={14} />
             <input
               className="irm-search__input"
-              placeholder="Search books, authors…"
+              placeholder={isGames ? "Search games, developers…" : "Search books, authors…"}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -132,14 +177,19 @@ export default function Library() {
               </button>
             )}
           </label>
-          <button className="irm-btn irm-btn--primary" onClick={openAddBookDialog}>
-            <Icon.Plus size={14} /> Add book
+          {isGames && (
+            <button className="irm-btn irm-btn--ghost" onClick={() => setSteamOpen(true)}>
+              🎮 Steam
+            </button>
+          )}
+          <button className="irm-btn irm-btn--primary" onClick={() => openAddBookDialog(isGames ? "game" : "book")}>
+            <Icon.Plus size={14} /> {isGames ? "Add game" : "Add book"}
           </button>
         </div>
       </div>
 
       <div className="irm-tabs">
-        {TABS.map((tab) => (
+        {TABS[media].map((tab) => (
           <button
             key={tab.id}
             className={`irm-tab ${filter === tab.id ? "is-active" : ""}`}
@@ -157,7 +207,7 @@ export default function Library() {
             onChange={(e) => setSort(e.target.value as SortKey)}
           >
             {SORTS.map((s) => (
-              <option key={s.id} value={s.id}>{s.label}</option>
+              <option key={s.id} value={s.id}>{isGames && s.game ? s.game : s.label}</option>
             ))}
           </select>
         </label>
@@ -167,12 +217,20 @@ export default function Library() {
         <div className="irm-card irm-empty" style={{ minHeight: 240 }}>
           <div className="irm-empty__icon"><Icon.Book size={20} /></div>
           <div className="irm-empty__text">
-            {searchQuery ? `No books match "${searchQuery}"` : "No books in this shelf yet."}
+            {searchQuery
+              ? `No ${isGames ? "games" : "books"} match "${searchQuery}"`
+              : `No ${isGames ? "games" : "books"} in this shelf yet.`}
           </div>
           {!searchQuery && (
-            <button className="irm-btn irm-btn--ghost" onClick={openAddBookDialog}>
-              <Icon.Plus size={13} /> Add your first book
-            </button>
+            isGames ? (
+              <button className="irm-btn irm-btn--ghost" onClick={() => setSteamOpen(true)}>
+                🎮 Import from Steam
+              </button>
+            ) : (
+              <button className="irm-btn irm-btn--ghost" onClick={() => openAddBookDialog("book")}>
+                <Icon.Plus size={13} /> Add your first book
+              </button>
+            )
           )}
         </div>
       ) : (
@@ -182,6 +240,7 @@ export default function Library() {
           ))}
         </div>
       )}
+      <SteamDialog open={steamOpen} onClose={() => setSteamOpen(false)} />
     </div>
   );
 }

@@ -10,9 +10,10 @@ interface Props {
   onClose: () => void;
   onSubmit: (book: NewBook) => void;
   today: string;
+  defaultMediaType?: "book" | "game";
 }
 
-export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
+export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType = "book" }: Props) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [mediaType, setMediaType] = useState<"book" | "game">("book");
@@ -29,8 +30,8 @@ export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
     if (!open) return;
     setTitle("");
     setAuthor("");
-    setMediaType("book");
-    setProgressUnit("page");
+    setMediaType(defaultMediaType);
+    setProgressUnit(defaultMediaType === "game" ? "hour" : "page");
     setPlatform("");
     setTotalPages("");
     setStatus("want-to-read");
@@ -81,7 +82,7 @@ export function AddBookDialog({ open, onClose, onSubmit, today }: Props) {
     <div className="irm-dialog__backdrop" onClick={onClose}>
       <div className="irm-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div className="irm-dialog__head">
-          <h3>Add a book</h3>
+          <h3>{mediaType === "game" ? "Add a game" : "Add a book"}</h3>
           <button className="irm-iconbtn" onClick={onClose}>
             <Icon.X size={16} />
           </button>

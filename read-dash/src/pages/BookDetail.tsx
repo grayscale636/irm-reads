@@ -448,15 +448,18 @@ export default function BookDetail() {
     await updateBook(book.id, { quotes: next });
   };
 
+  // Return to the shelf this item belongs to (Books or Games).
+  const libraryPath = isGame ? "/?media=games" : "/";
+
   const handleDeleteBook = async () => {
-    if (!confirm("Delete this book and all its reading logs?")) return;
+    if (!confirm(`Delete this ${isGame ? "game" : "book"} and all its ${isGame ? "play" : "reading"} logs?`)) return;
     await deleteBook(book.id);
-    navigate("/");
+    navigate(libraryPath);
   };
 
   return (
     <div className="irm-main irm-detail">
-      <button className="irm-backbtn" onClick={() => navigate("/")}>
+      <button className="irm-backbtn" onClick={() => navigate(libraryPath)}>
         <Icon.ChevronLeft size={14} /> Back to library
       </button>
 
