@@ -66,7 +66,7 @@ router.get('/library', async (req: AuthRequest, res: Response) => {
   } catch (e) { fail(res, e, 'library failed'); }
 });
 
-// POST /api/steam/import { games: [{ appid, targetHours, status }] }
+// POST /api/steam/import { games: [{ appid, status }] }
 // Current playtime becomes the baseline; only playtime after import is logged as sessions.
 router.post('/import', async (req: AuthRequest, res: Response) => {
   try {
@@ -75,7 +75,7 @@ router.post('/import', async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: 'Steam account not linked' });
       return;
     }
-    const wanted: Array<{ appid: number; targetHours?: number; status?: string }> =
+    const wanted: Array<{ appid: number; status?: string }> =
       Array.isArray(req.body?.games) ? req.body.games.slice(0, 50) : [];
     const owned = new Map((await getOwnedGames(steamId)).map((g) => [g.appid, g]));
     const statuses = new Set(['reading', 'paused', 'want-to-read', 'completed', 'dnf']);
@@ -93,15 +93,13 @@ router.post('/import', async (req: AuthRequest, res: Response) => {
       const { cover, developer } = await getStoreDetails(game.appid);
       const played = Math.floor(game.playtimeMinutes / 60);
       const status = statuses.has(String(w.status)) ? String(w.status) : played > 0 ? 'paused' : 'want-to-read';
-      const total = Math.max(Math.round(Number(w.targetHours) || 0), played + 1, 1);
       const id = `steam-${game.appid}-${Date.now()}`;
       await pool.query(
         `INSERT INTO books (id, user_id, title, author, cover, rating, progress, status, pages_read, total_pages,
                             started_at, quotes, media_type, progress_unit, metadata)
-         VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10, '{}', 'game', 'hour', $11)`,
+         VALUES ($1, $2, $3, $4, $5, 0, 0, $6, $7, 0, $8, '{}', 'game', 'hour', $9)`,
         [
-          id, req.userId, game.name, developer || 'Unknown', cover,
-          Math.round((played * 100) / total), status, played, total,
+          id, req.userId, game.name, developer || 'Unknown', cover, status, played,
           status === 'reading' ? new Date().toISOString().slice(0, 10) : null,
           { platform: 'PC (Steam)', steam_appid: game.appid, steam_playtime_minutes: game.playtimeMinutes,
             steam_last_synced: new Date().toISOString() },

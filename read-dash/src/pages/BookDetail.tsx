@@ -13,7 +13,8 @@ import { uploadToMinio, deleteFromMinio } from "@/lib/minio";
 import BookAIChat from "@/components/design/BookAIChat";
 import { ReflectionDialog } from "@/components/design/ReflectionDialog";
 import { downloadBookMarkdown } from "@/lib/export";
-import { STATUS_ORDER, statusOptionLabel } from "@/lib/media";
+import { STATUS_ORDER, statusOptionLabel, formatHours, playMinutes } from "@/lib/media";
+import { GamePlaytime } from "@/components/design/GamePlaytime";
 import ReactMarkdown from "react-markdown";
 
 const NOTE_TYPES: Array<{ value: NoteType; label: string }> = [
@@ -82,6 +83,7 @@ export default function BookDetail() {
     updateBook,
     deleteBook,
     addReadingLog,
+    logGameSession,
     deleteReadingLog,
   } = useBooks();
 
@@ -506,9 +508,9 @@ export default function BookDetail() {
             </div>
 
             <div className="irm-detail__metaitem">
-              <span className="irm-field__label">{isGame ? "Progress" : "Pages"}</span>
+              <span className="irm-field__label">{isGame ? "Played" : "Pages"}</span>
               <span className="irm-mono irm-detail__metaval">
-                {unit === "percent" ? `${book.pagesRead}% / ${book.totalPages}%` : `${book.pagesRead} / ${book.totalPages} ${unitLabel(unit, true)}`} · {pct}%
+                {isGame ? formatHours(playMinutes(book)) : `${book.pagesRead} / ${book.totalPages} · ${pct}%`}
               </span>
             </div>
 
@@ -548,6 +550,13 @@ export default function BookDetail() {
         </aside>
 
         <div className="irm-detail__right">
+          {isGame ? (
+            <GamePlaytime
+              book={book}
+              today={today}
+              onLogSession={(minutes, date, checkpoint) => logGameSession(book.id, minutes, date, checkpoint)}
+            />
+          ) : (
           <section className="irm-card">
             <div className="irm-section-head">
               <div>
@@ -647,6 +656,7 @@ export default function BookDetail() {
             </div>
 
           </section>
+          )}
 
           {/* ── Reflection ── */}
           <SectionCard>
@@ -1207,8 +1217,8 @@ export default function BookDetail() {
             />
             {historyColl.open && (bookLogs.length === 0 ? (
               <div className="irm-empty" style={{ padding: "24px 0" }}>
-                <div className="irm-empty__text">No reading logged yet.</div>
-                <button
+                <div className="irm-empty__text">{isGame ? "No sessions logged yet." : "No reading logged yet."}</div>
+                {!isGame && <button
                   className="irm-btn irm-btn--ghost"
                   style={{ marginTop: 8 }}
                   onClick={() => {
@@ -1227,7 +1237,7 @@ export default function BookDetail() {
                   }}
                 >
                   <Icon.Plus size={13} /> Log first session
-                </button>
+                </button>}
               </div>
             ) : (
               <ul className="irm-history">
@@ -1235,15 +1245,15 @@ export default function BookDetail() {
                   <li key={log.id} className="irm-history__item">
                     <div className="irm-history__date irm-mono">{log.date.slice(5)}</div>
                     <div className="irm-history__range irm-mono">
-                      {unit === "page"
-                        ? (log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : `p.${log.pagesRead}`)
-                        : `${log.startPage} → ${log.endPage}${unit === "percent" ? "%" : ""}`}
-                      {log.checkpoint ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {log.checkpoint}</span> : null}
-                      {log.durationMinutes ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {log.durationMinutes} min</span> : null}
+                      {isGame
+                        ? (log.checkpoint || "Session")
+                        : (log.startPage > 0 ? `p.${log.startPage} → p.${log.endPage}` : `p.${log.pagesRead}`)}
+                      {!isGame && log.checkpoint ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {log.checkpoint}</span> : null}
+                      {!isGame && log.durationMinutes ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {log.durationMinutes} min</span> : null}
                     </div>
                     <div className="irm-history__pages">
-                      <span className="irm-mono">{log.pagesRead}</span>
-                      <span className="irm-history__pages-label">{unitLabel(unit, true)}</span>
+                      <span className="irm-mono">{isGame ? (log.durationMinutes ?? log.pagesRead * 60) : log.pagesRead}</span>
+                      <span className="irm-history__pages-label">{isGame ? "min" : "pages"}</span>
                     </div>
                     <button className="irm-logitem__delete" style={{ opacity: 1 }} onClick={() => { if (confirm('Delete this reading session?')) deleteReadingLog(log.id); }}>
                       <Icon.Trash size={14} />
@@ -1260,7 +1270,7 @@ export default function BookDetail() {
           </SectionCard>
 
           {/* ── Reading pace chart ── */}
-          {bookLogs.length >= 2 && <SectionCard><PaceChart logs={bookLogs} height={60} /></SectionCard>}
+          {!isGame && bookLogs.length >= 2 && <SectionCard><PaceChart logs={bookLogs} height={60} /></SectionCard>}
         </div>
       </div>
 
@@ -1272,7 +1282,7 @@ export default function BookDetail() {
           bookAuthor={book.author}
           status={book.status}
           isGame={isGame}
-          unitShort={isGame ? unitLabel(unit, true) : "hal"}
+          playedLabel={isGame ? formatHours(playMinutes(book)) : undefined}
           pagesRead={book.pagesRead}
           totalPages={book.totalPages}
           onClose={() => setShowAI(false)}

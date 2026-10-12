@@ -18,7 +18,6 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [mediaType, setMediaType] = useState<"book" | "game">("book");
-  const [progressUnit, setProgressUnit] = useState<"page" | "hour" | "chapter" | "percent">("page");
   const [platform, setPlatform] = useState("");
   const [totalPages, setTotalPages] = useState("");
   const [status, setStatus] = useState<BookData["status"]>("want-to-read");
@@ -32,7 +31,6 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
     setTitle("");
     setAuthor("");
     setMediaType(defaultMediaType);
-    setProgressUnit(defaultMediaType === "game" ? "hour" : "page");
     setPlatform("");
     setTotalPages("");
     setStatus("want-to-read");
@@ -44,14 +42,35 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
 
   if (!open) return null;
 
+  const isGame = mediaType === "game";
   const tp = parseInt(totalPages, 10);
-  const valid = title.trim() && author.trim() && tp > 0;
-
-  const unitLabel = mediaType === "game" ? "total (hours)" : "Total pages";
-  const readLabel = mediaType === "game" ? "Played (hours)" : "Pages read";
+  // Games have no length/target — only optional hours played so far.
+  const valid = title.trim() && author.trim() && (isGame || tp > 0);
 
   const handleSubmit = () => {
     if (!valid) return;
+    if (isGame) {
+      const minutes = Math.max(0, Math.round((parseFloat(pagesRead) || 0) * 60));
+      onSubmit({
+        title: title.trim(),
+        author: author.trim(),
+        cover: "",
+        totalPages: 0,
+        pagesRead: Math.floor(minutes / 60),
+        progress: 0,
+        status,
+        rating: status === "completed" ? rating : 0,
+        startedAt: status === "want-to-read" ? undefined : (startedAt || today),
+        finishedAt: status === "completed" ? (finishedAt || today) : undefined,
+        reflection: "",
+        quotes: [],
+        mediaType: "game",
+        progressUnit: "hour",
+        metadata: { platform: platform.trim() || undefined, playtime_minutes: minutes },
+      });
+      onClose();
+      return;
+    }
     let pr = parseInt(pagesRead, 10) || 0;
     if (status === "completed") pr = tp;
     if (status === "want-to-read") pr = 0;
@@ -72,9 +91,8 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
       finishedAt: status === "completed" ? (finishedAt || today) : undefined,
       reflection: "",
       quotes: [],
-      mediaType,
-      progressUnit: mediaType === "game" ? progressUnit : "page",
-      metadata: mediaType === "game" ? { platform: platform.trim() || undefined } : undefined,
+      mediaType: "book",
+      progressUnit: "page",
     });
     onClose();
   };
@@ -103,52 +121,49 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
               <select
                 className="irm-input"
                 value={mediaType}
-                onChange={(e) => {
-                  const mt = e.target.value as "book" | "game";
-                  setMediaType(mt);
-                  if (mt === "game" && progressUnit === "page") setProgressUnit("hour");
-                  if (mt === "book") setProgressUnit("page");
-                }}
+                onChange={(e) => setMediaType(e.target.value as "book" | "game")}
               >
                 <option value="book">Book</option>
                 <option value="game">Game</option>
               </select>
             </label>
-            <label className="irm-field">
-              <span className="irm-field__label">Progress unit</span>
-              <select
-                className="irm-input"
-                value={mediaType === "game" ? progressUnit : "page"}
-                disabled={mediaType !== "game"}
-                onChange={(e) => setProgressUnit(e.target.value as any)}
-              >
-                <option value="hour">Hours</option>
-                <option value="chapter">Chapters</option>
-                <option value="percent">Percent</option>
-              </select>
-            </label>
+            {mediaType === "game" && (
+              <label className="irm-field">
+                <span className="irm-field__label">Platform</span>
+                <input
+                  className="irm-input"
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                  placeholder="PC / PS5 / Switch…"
+                />
+              </label>
+            )}
           </div>
-          {mediaType === "game" && (
-            <label className="irm-field">
-              <span className="irm-field__label">Platform</span>
-              <input
-                className="irm-input"
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value)}
-                placeholder="PC / PS5 / Steam…"
-              />
-            </label>
-          )}
           <div className="irm-field-row">
-            <label className="irm-field">
-              <span className="irm-field__label">{unitLabel}</span>
-              <input
-                type="number"
-                className="irm-input irm-mono"
-                value={totalPages}
-                onChange={(e) => setTotalPages(e.target.value)}
-              />
-            </label>
+            {isGame ? (
+              <label className="irm-field">
+                <span className="irm-field__label">Hours played (optional)</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  className="irm-input irm-mono"
+                  value={pagesRead}
+                  onChange={(e) => setPagesRead(e.target.value)}
+                  placeholder="0"
+                />
+              </label>
+            ) : (
+              <label className="irm-field">
+                <span className="irm-field__label">Total pages</span>
+                <input
+                  type="number"
+                  className="irm-input irm-mono"
+                  value={totalPages}
+                  onChange={(e) => setTotalPages(e.target.value)}
+                />
+              </label>
+            )}
             <label className="irm-field">
               <span className="irm-field__label">Status</span>
               <select
@@ -173,16 +188,18 @@ export function AddBookDialog({ open, onClose, onSubmit, today, defaultMediaType
                   onChange={(e) => setStartedAt(e.target.value)}
                 />
               </label>
-              <label className="irm-field">
-                <span className="irm-field__label">{readLabel}</span>
-                <input
-                  type="number"
-                  className="irm-input irm-mono"
-                  value={pagesRead}
-                  onChange={(e) => setPagesRead(e.target.value)}
-                  placeholder="0"
-                />
-              </label>
+              {!isGame && (
+                <label className="irm-field">
+                  <span className="irm-field__label">Pages read</span>
+                  <input
+                    type="number"
+                    className="irm-input irm-mono"
+                    value={pagesRead}
+                    onChange={(e) => setPagesRead(e.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+              )}
             </div>
           )}
           {status === "completed" && (

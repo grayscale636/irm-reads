@@ -13,8 +13,8 @@ interface BookAIChatProps {
   bookAuthor: string;
   status: string;
   isGame?: boolean;
-  /** Short unit for the progress line ("hal", "hours", …). */
-  unitShort?: string;
+  /** Games: preformatted time played (e.g. "19.3 h"); replaces page progress. */
+  playedLabel?: string;
   pagesRead: number;
   totalPages: number;
   onClose: () => void;
@@ -28,7 +28,7 @@ export default function BookAIChat({
   bookAuthor,
   status,
   isGame = false,
-  unitShort = "hal",
+  playedLabel,
   pagesRead,
   totalPages,
   onClose,
@@ -152,9 +152,9 @@ export default function BookAIChat({
     status === "want-to-read"
       ? (isGame ? "Pengin dimainin" : "Pengin dibaca")
       : status === "reading"
-      ? `${pagesRead}/${totalPages} ${unitShort}`
+      ? (isGame ? `${playedLabel} dimainin` : `${pagesRead}/${totalPages} hal`)
       : status === "completed"
-      ? `${totalPages} ${unitShort} · Selesai`
+      ? (isGame ? `${playedLabel} · Tamat` : `${totalPages} hal · Selesai`)
       : status === "paused"
       ? "Dihentikan"
       : "Tidak dilanjutkan";

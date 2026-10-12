@@ -14,7 +14,6 @@ interface Props {
 }
 
 interface Pick {
-  targetHours: string;
   status: Book["status"];
 }
 
@@ -86,7 +85,7 @@ export function SteamDialog({ open, onClose }: Props) {
     setPicks((prev) => {
       const next = { ...prev };
       if (next[g.appid]) delete next[g.appid];
-      else next[g.appid] = { targetHours: "", status: defaultStatus(g) };
+      else next[g.appid] = { status: defaultStatus(g) };
       return next;
     });
 
@@ -94,7 +93,6 @@ export function SteamDialog({ open, onClose }: Props) {
     run("import", async () => {
       const games = Object.entries(picks).map(([appid, p]) => ({
         appid: Number(appid),
-        targetHours: parseInt(p.targetHours, 10) || undefined,
         status: p.status,
       }));
       const r = await importSteamGames(games);
@@ -198,16 +196,6 @@ export function SteamDialog({ open, onClose }: Props) {
                                   <option key={s} value={s}>{statusLabel(s, "game")}</option>
                                 ))}
                               </select>
-                              <input
-                                type="number"
-                                min={1}
-                                className="irm-input irm-mono"
-                                style={{ width: 130 }}
-                                value={pick.targetHours}
-                                placeholder="target hours"
-                                title="Estimated hours to finish (optional)"
-                                onChange={(e) => setPicks((p) => ({ ...p, [g.appid]: { ...pick, targetHours: e.target.value } }))}
-                              />
                             </span>
                           )}
                         </li>

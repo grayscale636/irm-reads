@@ -5,7 +5,7 @@ import type { OutletCtx } from "@/layouts/AppLayout";
 import { Icon } from "@/components/design/Icons";
 import { LibraryCard } from "@/components/design/LibraryCard";
 import { SteamDialog } from "@/components/design/SteamDialog";
-import { statusLabel } from "@/lib/media";
+import { statusLabel, playMinutes } from "@/lib/media";
 
 type Filter = "all" | "reading" | "completed" | "want-to-read" | "paused" | "dnf";
 type SortKey = "recent" | "title" | "author" | "rating" | "progress" | "pages";
@@ -19,13 +19,14 @@ const tabsFor = (media: Media): Array<{ id: Filter; label: string }> => [
   ...TAB_ORDER.map((id) => ({ id, label: statusLabel(id, media === "games" ? "game" : "book") })),
 ];
 
-const SORTS: Array<{ id: SortKey; label: string; game?: string }> = [
+// `game: null` hides an option on the Games shelf (games have no progress).
+const SORTS: Array<{ id: SortKey; label: string; game?: string | null }> = [
   { id: "recent", label: "Recently active" },
   { id: "title", label: "Title (A→Z)" },
   { id: "author", label: "Author (A→Z)", game: "Developer (A→Z)" },
   { id: "rating", label: "Rating (high→low)" },
-  { id: "progress", label: "Progress (high→low)" },
-  { id: "pages", label: "Length (longest)" },
+  { id: "progress", label: "Progress (high→low)", game: null },
+  { id: "pages", label: "Length (longest)", game: "Most played" },
 ];
 
 export default function Library() {
@@ -38,6 +39,7 @@ export default function Library() {
   const isGames = media === "games";
   const setMedia = (m: Media) => {
     setFilter("all");
+    if (m === "games" && sort === "progress") setSort("recent");
     setParams(m === "games" ? { media: "games" } : {}, { replace: true });
   };
   const books = useMemo(
@@ -95,7 +97,9 @@ export default function Library() {
         sorted.sort((a, b) => (b.progress || 0) - (a.progress || 0));
         break;
       case "pages":
-        sorted.sort((a, b) => (b.totalPages || 0) - (a.totalPages || 0));
+        sorted.sort((a, b) =>
+          isGames ? playMinutes(b) - playMinutes(a) : (b.totalPages || 0) - (a.totalPages || 0),
+        );
         break;
       case "recent":
       default: {
@@ -109,7 +113,7 @@ export default function Library() {
       }
     }
     return sorted;
-  }, [books, filter, searchQuery, sort, lastActivity]);
+  }, [books, filter, searchQuery, sort, lastActivity, isGames]);
 
   if (isLoading) {
     return (
@@ -195,7 +199,7 @@ export default function Library() {
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
           >
-            {SORTS.map((s) => (
+            {SORTS.filter((s) => !(isGames && s.game === null)).map((s) => (
               <option key={s.id} value={s.id}>{isGames && s.game ? s.game : s.label}</option>
             ))}
           </select>

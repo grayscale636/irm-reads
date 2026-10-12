@@ -11,6 +11,7 @@ import {
   ReadingLog,
   QuoteItem
 } from "@/lib/api";
+import { playMinutes } from "@/lib/media";
 
 export interface BookData {
   id: string;
@@ -53,6 +54,13 @@ export interface SessionExtra {
 // Keep status ↔ progress ↔ finishedAt consistent (mirrors the API guard):
 // completed = 100% with a finish date; active/backlog statuses have no finish date.
 function normalizeStatus(book: BookData): void {
+  if (!isBook(book)) {
+    // Games have no progress; only the finish-date rule applies.
+    book.progress = 0;
+    if (book.status === "reading" || book.status === "paused" || book.status === "want-to-read") book.finishedAt = undefined;
+    else if (book.status === "completed" && !book.finishedAt) book.finishedAt = new Date().toISOString().split('T')[0];
+    return;
+  }
   if (book.status === "completed") {
     book.pagesRead = book.totalPages;
     book.progress = 100;
@@ -82,6 +90,7 @@ interface BooksContextType {
   deleteBook: (id: string) => Promise<void>;
   getBook: (id: string) => BookData | undefined;
   addReadingLog: (bookId: string, startPage: number, endPage: number, date?: string, extra?: SessionExtra) => Promise<void>;
+  logGameSession: (bookId: string, minutes: number, date?: string, checkpoint?: string | null) => Promise<void>;
   deleteReadingLog: (id: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
@@ -153,14 +162,15 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     if (!book) return;
 
     const updated = { ...book, ...updates };
+    const pageBased = isBook(updated);
     
     // Auto-calculate progress
-    if (updates.pagesRead !== undefined || updates.totalPages !== undefined) {
+    if (pageBased && (updates.pagesRead !== undefined || updates.totalPages !== undefined)) {
       updated.progress = Math.round((updated.pagesRead / updated.totalPages) * 100);
     }
     
     // Auto-create reading log when pagesRead increases
-    if (updates.pagesRead !== undefined && updates.pagesRead > book.pagesRead) {
+    if (pageBased && updates.pagesRead !== undefined && updates.pagesRead > book.pagesRead) {
       await createReadingLog(id, book.pagesRead, updates.pagesRead);
     }
     
@@ -168,6 +178,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     // - Skip if user is explicitly changing the status (so paused/dnf stick)
     // - Skip paused/dnf — completing those should be an explicit user action
     if (
+      pageBased &&
       !updates.status &&
       updated.pagesRead >= updated.totalPages &&
       (updated.status === "reading" || updated.status === "want-to-read")
@@ -180,7 +191,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     }
     
     // Completing logs the remaining pages (even when a finishedAt came along).
-    if (updates.status === "completed" && book.status !== "completed" && updated.pagesRead < updated.totalPages) {
+    if (pageBased && updates.status === "completed" && book.status !== "completed" && updated.pagesRead < updated.totalPages) {
       await createReadingLog(id, book.pagesRead, updated.totalPages, updated.finishedAt);
     }
     // Auto-set started date when reading
@@ -213,7 +224,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
 
     // Also update book's pagesRead if endPage is higher
     const book = books.find(b => b.id === bookId);
-    if (book && endPage > book.pagesRead) {
+    if (book && isBook(book) && endPage > book.pagesRead) {
       const updated = { ...book, pagesRead: Math.min(endPage, book.totalPages) };
       updated.progress = Math.round((updated.pagesRead / updated.totalPages) * 100);
 
@@ -242,6 +253,31 @@ export function BooksProvider({ children }: { children: ReactNode }) {
         prev.map((b) => (b.id === bookId ? updated : b))
       );
     }
+  };
+
+  // Manual (non-Steam) game session: add the minutes to the running playtime and
+  // log the session. Never completes the game — that's always the player's call.
+  const logGameSession = async (bookId: string, minutes: number, date?: string, checkpoint?: string | null): Promise<void> => {
+    const book = books.find((b) => b.id === bookId);
+    if (!book || minutes <= 0) return;
+    const before = playMinutes(book);
+    const after = before + minutes;
+    await createReadingLog(bookId, Math.floor(before / 60), Math.floor(after / 60), date, {
+      durationMinutes: minutes,
+      checkpoint: checkpoint ?? null,
+    });
+    const updated: BookData = {
+      ...book,
+      pagesRead: Math.floor(after / 60),
+      metadata: { ...(book.metadata || {}), playtime_minutes: after },
+    };
+    if (updated.status === "paused" || updated.status === "want-to-read") {
+      updated.status = "reading";
+      if (!updated.startedAt) updated.startedAt = date || new Date().toISOString().split('T')[0];
+    }
+    normalizeStatus(updated);
+    await apiUpdateBook(bookId, updated);
+    setBooks((prev) => prev.map((b) => (b.id === bookId ? updated : b)));
   };
 
   const deleteReadingLog = async (id: string): Promise<void> => {
@@ -280,6 +316,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
       deleteBook, 
       getBook,
       addReadingLog,
+      logGameSession,
       deleteReadingLog,
       refreshData
     }}>

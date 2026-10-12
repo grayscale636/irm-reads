@@ -10,7 +10,7 @@ import {
   type ReadingLog,
   type BookNote,
 } from "./api";
-import { statusOptionLabel } from "./media";
+import { statusOptionLabel, formatHours, playMinutes } from "./media";
 
 function triggerDownload(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -99,7 +99,9 @@ export function bookToMarkdown(book: Book, notes: BookNote[], logs: ReadingLog[]
 
   const meta: string[] = [`- **Status:** ${statusOptionLabel(book.status, book.mediaType)}`];
   if (book.rating > 0) meta.push(`- **Rating:** ${book.rating}/5`);
-  if (book.totalPages > 0) {
+  if (book.mediaType === "game") {
+    meta.push(`- **Played:** ${formatHours(playMinutes(book))}`);
+  } else if (book.totalPages > 0) {
     const pct = Math.round((book.pagesRead / book.totalPages) * 100);
     meta.push(`- **Progress:** ${book.pagesRead}/${book.totalPages} (${pct}%)`);
   }
@@ -140,8 +142,14 @@ export function bookToMarkdown(book: Book, notes: BookNote[], logs: ReadingLog[]
   }
 
   if (logs.length > 0) {
-    lines.push("## Reading log", "");
+    const game = book.mediaType === "game";
+    lines.push(game ? "## Play log" : "## Reading log", "");
     for (const l of [...logs].sort((a, b) => a.date.localeCompare(b.date))) {
+      if (game) {
+        const mins = l.durationMinutes ?? l.pagesRead * 60;
+        lines.push(`- ${l.date} · ${mins} min${l.checkpoint ? ` · ${l.checkpoint}` : ""}`);
+        continue;
+      }
       const range = l.startPage > 0 ? `p.${l.startPage}→${l.endPage}` : `p.${l.pagesRead}`;
       lines.push(`- ${l.date} · ${range} · ${l.pagesRead} pages`);
     }

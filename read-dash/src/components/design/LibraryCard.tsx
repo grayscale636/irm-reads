@@ -2,7 +2,7 @@ import type { BookData } from "@/contexts/BooksContext";
 import { BookCover } from "./BookCover";
 import { ProgressBar } from "./ProgressBar";
 import { Icon } from "./Icons";
-import { statusLabel } from "@/lib/media";
+import { statusLabel, formatHours, playMinutes } from "@/lib/media";
 
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 export function LibraryCard({ book, onClick }: Props) {
   const total = book.totalPages || 1;
   const pct = Math.round((book.pagesRead / total) * 100);
-  const unitWord = { hour: "hours", chapter: "chapters", percent: "%", page: "pages" }[book.progressUnit || "page"];
+  const isGame = book.mediaType === "game";
 
   return (
     <button type="button" className="irm-libcard" onClick={onClick}>
@@ -31,7 +31,14 @@ export function LibraryCard({ book, onClick }: Props) {
         </div>
         <h3 className="irm-libcard__title">{book.title}</h3>
         <p className="irm-libcard__author">{book.author}</p>
-        {book.status === "reading" && (
+        {isGame && (
+          <div className="irm-libcard__progress">
+            <div className="irm-libcard__progress-row">
+              <span className="irm-mono">{playMinutes(book) > 0 ? `${formatHours(playMinutes(book))} played` : "Not played yet"}</span>
+            </div>
+          </div>
+        )}
+        {!isGame && book.status === "reading" && (
           <div className="irm-libcard__progress">
             <div className="irm-libcard__progress-row">
               <span className="irm-mono">
@@ -42,19 +49,19 @@ export function LibraryCard({ book, onClick }: Props) {
             <ProgressBar value={book.pagesRead} max={book.totalPages} height={3} />
           </div>
         )}
-        {book.status === "completed" && (
+        {!isGame && book.status === "completed" && (
           <div className="irm-libcard__progress">
             <div className="irm-libcard__progress-row">
-              <span className="irm-mono">{book.totalPages} {unitWord}</span>
+              <span className="irm-mono">{book.totalPages} pages</span>
               <span className="irm-mono">100%</span>
             </div>
             <ProgressBar value={1} max={1} height={3} />
           </div>
         )}
-        {book.status === "want-to-read" && (
+        {!isGame && book.status === "want-to-read" && (
           <div className="irm-libcard__progress">
             <div className="irm-libcard__progress-row">
-              <span className="irm-mono">{book.totalPages} {unitWord}</span>
+              <span className="irm-mono">{book.totalPages} pages</span>
               <span className="irm-libcard__queued">queued</span>
             </div>
             <div className="irm-progress" style={{ height: 3 }}>
@@ -62,7 +69,7 @@ export function LibraryCard({ book, onClick }: Props) {
             </div>
           </div>
         )}
-        {(book.status === "paused" || book.status === "dnf") && (
+        {!isGame && (book.status === "paused" || book.status === "dnf") && (
           <div className="irm-libcard__progress">
             <div className="irm-libcard__progress-row">
               <span className="irm-mono">

@@ -85,7 +85,7 @@ export async function syncUser(userId: string, steamId: string): Promise<{ updat
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `SELECT id, status, total_pages, metadata FROM books
+      `SELECT id, status, metadata FROM books
        WHERE user_id = $1 AND metadata ? 'steam_appid' FOR UPDATE`,
       [userId]
     );
@@ -106,19 +106,13 @@ export async function syncUser(userId: string, steamId: string): Promise<{ updat
          VALUES ($1, $2, $3, CURRENT_DATE, $4, $5, $6, $7)`,
         [`steam-${book.metadata.steam_appid}-${Date.now()}`, userId, book.id, end - start, start, end, now - prev]
       );
-      // Playtime past the target doesn't mean "finished" — grow the target instead.
-      // A completed game stays at 100% (replays just extend it).
-      const completed = book.status === 'completed';
-      const total = completed ? Math.max(book.total_pages || 0, end) : Math.max(book.total_pages || 0, end + 1);
-      const read = completed ? total : end;
       await client.query(
-        `UPDATE books SET metadata = $1, pages_read = $2::int, total_pages = $3::int,
-           progress = ROUND($2::int * 100.0 / $3::int),
+        `UPDATE books SET metadata = $1, pages_read = $2,
            status = CASE WHEN status IN ('want-to-read', 'paused') THEN 'reading' ELSE status END,
            started_at = COALESCE(started_at, CURRENT_DATE),
            updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4`,
-        [meta, read, total, book.id]
+         WHERE id = $3`,
+        [meta, end, book.id]
       );
       updated++;
       minutes += now - prev;
