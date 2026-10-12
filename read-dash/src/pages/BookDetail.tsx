@@ -135,6 +135,8 @@ export default function BookDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const notesColl = useCollapsible("book-notes", true);
+  const spoilerIds = notes.filter((n) => n.isSpoiler).map((n) => n.id);
+  const allSpoilersShown = spoilerIds.length > 0 && spoilerIds.every((id) => revealedSpoilers.has(id));
   const reflectColl = useCollapsible("book-reflection", true);
   const quotesColl = useCollapsible("book-quotes", false);
   const historyColl = useCollapsible("book-history", false);
@@ -716,6 +718,15 @@ export default function BookDetail() {
               action={
                 notesColl.open && !showNoteForm && (
                   <>
+                    {spoilerIds.length > 0 && (
+                      <button
+                        className="irm-btn irm-btn--ghost"
+                        onClick={() => setRevealedSpoilers(allSpoilersShown ? new Set() : new Set(spoilerIds))}
+                        title={`${spoilerIds.length} spoiler note${spoilerIds.length === 1 ? "" : "s"}`}
+                      >
+                        {allSpoilersShown ? "Hide all spoilers" : "Show all spoilers"}
+                      </button>
+                    )}
                     {book.status !== "want-to-read" && book.pagesRead > 0 && (
                       <button
                         className="irm-btn irm-btn--ghost irm-ai-draft-btn"
