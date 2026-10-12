@@ -27,6 +27,7 @@ interface Entry {
   text: string;
   /** ISO date — notes only. Quotes have no date; they're sorted to the bottom. */
   date?: string;
+  isSpoiler?: boolean;
 }
 
 const TABS: Array<{ id: Filter; label: string }> = [
@@ -42,6 +43,13 @@ export default function Journal() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const toggleSpoiler = (key: string) =>
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Reset the slice whenever filter/query changes so the user doesn't end up
@@ -77,6 +85,7 @@ export default function Journal() {
         key: `n-${n.id}`,
         type: "note",
         noteType: n.noteType || "note",
+        isSpoiler: n.isSpoiler,
         pageRef: n.pageRef,
         tags: n.tags,
         bookId: n.bookId,
@@ -246,10 +255,17 @@ export default function Journal() {
                   </span>
                 )}
               </div>
-              <p className={`irm-journal__text${e.type === "quote" ? " irm-journal__text--quote" : ""}`}>
-                {e.type === "quote" && <span className="irm-journal__quotemark">"</span>}
-                {e.text}
-              </p>
+              {e.isSpoiler && (
+                <button className="irm-btn irm-btn--ghost" style={{ justifySelf: "start" }} onClick={() => toggleSpoiler(e.key)}>
+                  {revealed.has(e.key) ? "Hide spoiler" : "Show spoiler"}
+                </button>
+              )}
+              {(!e.isSpoiler || revealed.has(e.key)) && (
+                <p className={`irm-journal__text${e.type === "quote" ? " irm-journal__text--quote" : ""}`}>
+                  {e.type === "quote" && <span className="irm-journal__quotemark">"</span>}
+                  {e.text}
+                </p>
+              )}
               {e.tags && e.tags.length > 0 && (
                 <div className="irm-note__tags">
                   {e.tags.map((tag) => (

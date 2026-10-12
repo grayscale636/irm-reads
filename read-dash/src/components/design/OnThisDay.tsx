@@ -66,7 +66,8 @@ export function OnThisDay({ books, today, onOpenBook }: Props) {
         if (!mounted) return;
         const list: Entry[] = [];
         for (const n of notes) {
-          if (!n.createdAt) continue;
+          // Spoiler notes never resurface on the dashboard.
+          if (!n.createdAt || n.isSpoiler) continue;
           list.push({
             key: `n-${n.id}`,
             kind: "note",

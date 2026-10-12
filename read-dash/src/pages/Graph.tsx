@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   forceCenter,
   forceCollide,
@@ -15,8 +15,11 @@ import {
 import { useBooks } from "@/contexts/BooksContext";
 import { getAllNotes, normalizeQuote, type JournalNote } from "@/lib/api";
 import { Icon } from "@/components/design/Icons";
+import { formatHours, playMinutes, statusLabel } from "@/lib/media";
 
-type NodeType = "author" | "book" | "note" | "quote";
+// Books and games are separate node types (authors vs developers likewise).
+type NodeType = "author" | "book" | "developer" | "game" | "note" | "quote";
+type Media = "all" | "books" | "games";
 
 interface GNode extends SimulationNodeDatum {
   id: string;
@@ -40,11 +43,15 @@ interface InspectorDetail {
 const TYPE_META: Record<NodeType, { label: string; color: string }> = {
   author: { label: "Author", color: "#0072B2" },
   book: { label: "Book", color: "#E69F00" },
+  developer: { label: "Developer", color: "#56B4E9" },
+  game: { label: "Game", color: "#D55E00" },
   note: { label: "Note", color: "#009E73" },
   quote: { label: "Quote", color: "#CC79A7" },
 };
 
-const ALL_TYPES: NodeType[] = ["author", "book", "note", "quote"];
+const ALL_TYPES: NodeType[] = ["author", "book", "developer", "game", "note", "quote"];
+const BOOK_ONLY: NodeType[] = ["author", "book", "quote"];
+const GAME_ONLY: NodeType[] = ["developer", "game"];
 
 export default function Graph() {
   const navigate = useNavigate();
@@ -52,8 +59,15 @@ export default function Graph() {
   const [notes, setNotes] = useState<JournalNote[]>([]);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [visible, setVisible] = useState<Record<NodeType, boolean>>({
-    author: true, book: true, note: true, quote: true,
+    author: true, book: true, developer: true, game: true, note: true, quote: true,
   });
+  // Global Books/Games filter, kept in the URL like the library shelf.
+  const [params, setParams] = useSearchParams();
+  const media: Media = params.get("media") === "games" ? "games" : params.get("media") === "books" ? "books" : "all";
+  const setMedia = (m: Media) => setParams(m === "all" ? {} : { media: m }, { replace: true });
+  const shownTypes = ALL_TYPES.filter((t) =>
+    media === "books" ? !GAME_ONLY.includes(t) : media === "games" ? !BOOK_ONLY.includes(t) : true,
+  );
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
 
@@ -109,63 +123,79 @@ export default function Graph() {
   }, [isLoading, notesLoaded]);
 
   // Build the graph model (nodes + links) from books, notes, quotes.
+  // Works in scope for the current Books/Games filter.
+  const works = useMemo(
+    () => books.filter((b) => (media === "all" ? true : media === "games" ? b.mediaType === "game" : b.mediaType !== "game")),
+    [books, media],
+  );
+
   const graph = useMemo(() => {
     const nodes: GNode[] = [];
     const links: GLink[] = [];
-    const authorBooks = new Map<string, number>();
-    for (const b of books) authorBooks.set(b.author, (authorBooks.get(b.author) || 0) + 1);
+    const workType = new Map<string, NodeType>();
+    const creators = new Map<string, { type: NodeType; name: string; count: number }>();
+    for (const b of works) {
+      const isGame = b.mediaType === "game";
+      workType.set(b.id, isGame ? "game" : "book");
+      const type: NodeType = isGame ? "developer" : "author";
+      const key = `${type}:${b.author}`;
+      const c = creators.get(key);
+      if (c) c.count++;
+      else creators.set(key, { type, name: b.author, count: 1 });
+    }
 
     const notesByBook = new Map<string, number>();
     for (const n of notes) notesByBook.set(n.bookId, (notesByBook.get(n.bookId) || 0) + 1);
 
-    // Author nodes — sized by how many of their books you own.
-    if (visible.author) {
-      for (const [author, count] of authorBooks) {
-        nodes.push({
-          id: `author:${author}`,
-          type: "author",
-          label: author,
-          r: 7 + Math.sqrt(count) * 4,
-          sub: `${count} book${count === 1 ? "" : "s"}`,
-        });
-      }
+    // Author / developer nodes — sized by how many of their works you have.
+    for (const [key, c] of creators) {
+      if (!visible[c.type]) continue;
+      const unit = c.type === "developer" ? "game" : "book";
+      nodes.push({
+        id: key,
+        type: c.type,
+        label: c.name,
+        r: 7 + Math.sqrt(c.count) * 4,
+        sub: `${c.count} ${unit}${c.count === 1 ? "" : "s"}`,
+      });
     }
 
-    for (const b of books) {
+    for (const b of works) {
+      const type = workType.get(b.id)!;
+      if (!visible[type]) continue;
       const noteCount = notesByBook.get(b.id) || 0;
       const quoteCount = (Array.isArray(b.quotes) ? b.quotes : []).length;
       const entries = noteCount + quoteCount;
-      if (visible.book) {
-        nodes.push({
-          id: `book:${b.id}`,
-          type: "book",
-          label: b.title,
-          r: 6 + Math.sqrt(entries) * 3,
-          bookId: b.id,
-          sub: `${noteCount} notes · ${quoteCount} quotes`,
-        });
-        if (visible.author) {
-          links.push({ source: `author:${b.author}`, target: `book:${b.id}` });
-        }
-      }
+      nodes.push({
+        id: `book:${b.id}`,
+        type,
+        label: b.title,
+        r: 6 + Math.sqrt(entries) * 3,
+        bookId: b.id,
+        sub: `${noteCount} notes · ${quoteCount} quotes`,
+      });
+      const creatorType: NodeType = type === "game" ? "developer" : "author";
+      links.push({ source: `${creatorType}:${b.author}`, target: `book:${b.id}` });
     }
 
     if (visible.note) {
       for (const n of notes) {
+        if (!workType.has(n.bookId)) continue;
         nodes.push({
           id: `note:${n.id}`,
           type: "note",
-          label: n.text.slice(0, 40),
+          // Never surface spoiler text on the canvas.
+          label: n.isSpoiler ? "Spoiler" : n.text.slice(0, 40),
           r: 4,
           bookId: n.bookId,
           sub: n.bookTitle,
         });
-        if (visible.book) links.push({ source: `book:${n.bookId}`, target: `note:${n.id}` });
+        links.push({ source: `book:${n.bookId}`, target: `note:${n.id}` });
       }
     }
 
     if (visible.quote) {
-      for (const b of books) {
+      for (const b of works) {
         (Array.isArray(b.quotes) ? b.quotes : []).forEach((raw, idx) => {
           const q = normalizeQuote(raw);
           if (!q.text?.trim()) return;
@@ -177,7 +207,7 @@ export default function Graph() {
             bookId: b.id,
             sub: b.title,
           });
-          if (visible.book) links.push({ source: `book:${b.id}`, target: `quote:${b.id}:${idx}` });
+          links.push({ source: `book:${b.id}`, target: `quote:${b.id}:${idx}` });
         });
       }
     }
@@ -188,7 +218,7 @@ export default function Graph() {
       (l) => ids.has(l.source as string) && ids.has(l.target as string),
     );
     return { nodes, links: validLinks };
-  }, [books, notes, visible]);
+  }, [works, notes, visible]);
 
   // Adjacency for hover highlighting.
   const neighbors = useMemo(() => {
@@ -245,7 +275,10 @@ export default function Graph() {
     const sim = forceSimulation(nodes)
       .force("link", forceLink<GNode, GLink>(linksRef.current)
         .id((d) => d.id)
-        .distance((l) => ((l.source as GNode).type === "author" ? 70 : 34))
+        .distance((l) => {
+          const t = (l.source as GNode).type;
+          return t === "author" || t === "developer" ? 70 : 34;
+        })
         .strength(0.5))
       .force("charge", forceManyBody<GNode>().strength((d) => -18 - d.r * 4))
       .force("collide", forceCollide<GNode>((d) => d.r + 3))
@@ -348,32 +381,36 @@ export default function Graph() {
   }, [isLoading, notesLoaded]);
 
   const stats = useMemo(() => {
-    const authorBooks = new Map<string, number>();
-    for (const b of books) authorBooks.set(b.author, (authorBooks.get(b.author) || 0) + 1);
+    const byCreator = new Map<string, number>();
+    for (const b of works) byCreator.set(b.author, (byCreator.get(b.author) || 0) + 1);
     let topAuthor = "—", topAuthorN = 0;
-    for (const [a, n] of authorBooks) if (n > topAuthorN) { topAuthor = a; topAuthorN = n; }
+    for (const [a, n] of byCreator) if (n > topAuthorN) { topAuthor = a; topAuthorN = n; }
 
     const notesByBook = new Map<string, number>();
     for (const n of notes) notesByBook.set(n.bookId, (notesByBook.get(n.bookId) || 0) + 1);
     let topBook = "—", topBookN = 0;
-    for (const b of books) {
+    for (const b of works) {
       const c = notesByBook.get(b.id) || 0;
       if (c > topBookN) { topBook = b.title; topBookN = c; }
     }
-    return { topAuthor, topAuthorN, topBook, topBookN, authors: authorBooks.size };
-  }, [books, notes]);
+    return { topAuthor, topAuthorN, topBook, topBookN, authors: byCreator.size };
+  }, [works, notes]);
+  const creatorWord = media === "games" ? "developer" : media === "books" ? "author" : "creator";
+  const workWord = media === "games" ? "game" : media === "books" ? "book" : "work";
 
   // Detail for the inspector card (top-right) for the hovered node.
   const hoverDetail = useMemo<InspectorDetail | null>(() => {
     if (!hoverId) return null;
-    if (hoverId.startsWith("author:")) {
-      const name = hoverId.slice("author:".length);
-      const list = books.filter((b) => b.author === name);
+    if (hoverId.startsWith("author:") || hoverId.startsWith("developer:")) {
+      const dev = hoverId.startsWith("developer:");
+      const name = hoverId.slice(hoverId.indexOf(":") + 1);
+      const list = works.filter((b) => b.author === name && (b.mediaType === "game") === dev);
+      const unit = dev ? "game" : "book";
       return {
-        type: "author",
+        type: dev ? "developer" : "author",
         title: name,
-        meta: `${list.length} book${list.length === 1 ? "" : "s"}`,
-        rows: list.map((b) => ({ label: b.title, value: b.status })),
+        meta: `${list.length} ${unit}${list.length === 1 ? "" : "s"}`,
+        rows: list.map((b) => ({ label: b.title, value: statusLabel(b.status, b.mediaType) })),
       };
     }
     if (hoverId.startsWith("book:")) {
@@ -382,13 +419,16 @@ export default function Graph() {
       if (!b) return null;
       const noteCount = notes.filter((n) => n.bookId === bookId).length;
       const quoteCount = (Array.isArray(b.quotes) ? b.quotes : []).length;
+      const game = b.mediaType === "game";
       return {
-        type: "book",
+        type: game ? "game" : "book",
         title: b.title,
         meta: b.author,
         rows: [
-          { label: "Status", value: b.status },
-          { label: "Progress", value: `${b.pagesRead ?? 0} / ${b.totalPages ?? 0} hlm` },
+          { label: "Status", value: statusLabel(b.status, b.mediaType) },
+          game
+            ? { label: "Played", value: formatHours(playMinutes(b)) }
+            : { label: "Progress", value: `${b.pagesRead ?? 0} / ${b.totalPages ?? 0} hlm` },
           { label: "Notes", value: String(noteCount) },
           { label: "Quotes", value: String(quoteCount) },
         ],
@@ -402,7 +442,7 @@ export default function Graph() {
       return {
         type: "note",
         title: n.bookTitle || "Note",
-        meta: n.text,
+        meta: n.isSpoiler ? "Spoiler — open the note to read it." : n.text,
         rows: n.pageRef != null ? [{ label: "Halaman", value: String(n.pageRef) }] : [],
       };
     }
@@ -422,7 +462,7 @@ export default function Graph() {
       };
     }
     return null;
-  }, [hoverId, books, notes]);
+  }, [hoverId, books, works, notes]);
 
   const nodes = nodesRef.current;
   const links = linksRef.current;
@@ -474,7 +514,7 @@ export default function Graph() {
                 {nodes.map((n) => {
                   if (n.x == null) return null;
                   const dim = isDim(n.id);
-                  const showLabel = n.type === "author" || n.type === "book" || hoverId === n.id;
+                  const showLabel = n.type === "author" || n.type === "book" || n.type === "developer" || n.type === "game" || hoverId === n.id;
                   return (
                     <g
                       key={n.id}
@@ -506,9 +546,23 @@ export default function Graph() {
             </svg>
           )}
 
-          {/* Legend + filters */}
+          {/* Books/Games switch + legend filters */}
+          <div className="irm-graph__controls">
+          <div className="irm-mediaswitch" role="tablist">
+            {(["all", "books", "games"] as Media[]).map((m) => (
+              <button
+                key={m}
+                role="tab"
+                aria-selected={media === m}
+                className={`irm-mediaswitch__btn${media === m ? " is-active" : ""}`}
+                onClick={() => setMedia(m)}
+              >
+                {m === "all" ? "All" : m === "books" ? "Books" : "Games"}
+              </button>
+            ))}
+          </div>
           <div className="irm-graph__legend">
-            {ALL_TYPES.map((t) => (
+            {shownTypes.map((t) => (
               <button
                 key={t}
                 className={`irm-graph__legend-item${visible[t] ? "" : " is-off"}`}
@@ -518,6 +572,7 @@ export default function Graph() {
                 {TYPE_META[t].label}
               </button>
             ))}
+          </div>
           </div>
 
           {/* Stats */}
@@ -536,12 +591,12 @@ export default function Graph() {
             {statsOpen && (
               <div className="irm-graph__stats-body">
                 <div className="irm-graph__stat">
-                  <span className="irm-graph__stat-label">Most Featured Author</span>
+                  <span className="irm-graph__stat-label">Most featured {creatorWord}</span>
                   <span className="irm-graph__stat-val">{stats.topAuthor}</span>
-                  <span className="irm-graph__stat-sub irm-mono">{stats.topAuthorN} books</span>
+                  <span className="irm-graph__stat-sub irm-mono">{stats.topAuthorN} {workWord}s</span>
                 </div>
                 <div className="irm-graph__stat">
-                  <span className="irm-graph__stat-label">Most noted book</span>
+                  <span className="irm-graph__stat-label">Most noted {workWord}</span>
                   <span className="irm-graph__stat-val">{stats.topBook}</span>
                   <span className="irm-graph__stat-sub irm-mono">{stats.topBookN} notes</span>
                 </div>
